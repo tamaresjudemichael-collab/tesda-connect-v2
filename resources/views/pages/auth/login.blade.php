@@ -1,33 +1,128 @@
+
 <x-layouts::auth :title="__('Sign in')">
-    <flux:card class="border border-white/10 bg-[#102120]/95 p-6 text-white shadow-2xl shadow-black/30 sm:p-10">
+    <flux:card class="login-card border border-white/15 bg-[#102120]/95 p-6 text-white shadow-2xl shadow-black/30 sm:p-10">
         <div class="flex items-start justify-between gap-4">
             <div>
-                <flux:heading size="xl" class="text-3xl font-black text-white">Welcome back <span aria-hidden="true">👋</span></flux:heading>
-                <flux:text class="mt-2 text-base text-teal-50/55">Sign in to access your TESDAConnect workspace.</flux:text>
+                <flux:heading size="xl" class="text-3xl font-black tracking-tight !text-white">
+                    Welcome back <span aria-hidden="true">👋</span>
+                </flux:heading>
+
+                <flux:text class="mt-2 text-base leading-6 !text-white/90">
+                    Sign in to access your TESDA Connect workspace.
+                </flux:text>
             </div>
-            <a href="{{ route('home') }}" class="grid size-10 place-items-center rounded-full bg-white/10 text-xl text-white/60 transition hover:bg-white/20 hover:text-white" wire:navigate aria-label="Back to home">×</a>
+
+            <a
+                href="{{ route('home') }}"
+                class="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 text-xl text-white/80 transition hover:bg-white/20 hover:text-white"
+                wire:navigate
+                aria-label="Back to home"
+            >
+                ×
+            </a>
         </div>
 
-        @if (app()->environment('local'))
-            <div class="mt-7 rounded-xl border border-teal-100/15 bg-white/7 px-4 py-3 text-sm text-teal-50/65">🔑 Local demo: <strong class="text-white">admin@tesdaconnect.test / admin123</strong></div>
-        @endif
-
-        <x-auth-session-status class="mt-5 text-center" :status="session('status')" />
-        <x-passkey-verify />
+        <x-auth-session-status
+            class="mt-5 text-center text-sm !text-white"
+            :status="session('status')"
+        />
 
         <form method="POST" action="{{ route('login.store') }}" class="mt-7 flex flex-col gap-5">
             @csrf
-            <flux:input name="email" :label="__('Email address')" :value="old('email')" type="email" required autofocus autocomplete="email" placeholder="you@example.com" class="[--flux-input-background:rgba(255,255,255,.09)] [--flux-input-border-color:rgba(255,255,255,.14)] [--flux-input-color:white]" />
+
+            <flux:input
+                name="email"
+                :label="__('Email address')"
+                :value="old('email', app()->environment('local') ? 'admin@tesdaconnect.test' : '')"
+                type="email"
+                required
+                autofocus
+                autocomplete="email"
+                placeholder="you@example.com"
+                class="[--flux-input-background:rgba(255,255,255,.08)] [--flux-input-border-color:rgba(255,255,255,.25)] [--flux-input-color:#ffffff] [--flux-input-placeholder-color:rgba(255,255,255,.65)] [&_label]:!text-white [&_label]:!opacity-100"
+            />
+
             <div class="relative">
-                <flux:input name="password" :label="__('Password')" type="password" required autocomplete="current-password" :placeholder="__('Enter your password')" viewable class="[--flux-input-background:rgba(255,255,255,.09)] [--flux-input-border-color:rgba(255,255,255,.14)] [--flux-input-color:white]" />
+                <flux:input
+                    name="password"
+                    :label="__('Password')"
+                    type="password"
+                    required
+                    autocomplete="current-password"
+                    :value="app()->environment('local') ? 'admin123' : ''"
+                    :placeholder="__('Enter your password')"
+                    viewable
+                    class="[--flux-input-background:rgba(255,255,255,.08)] [--flux-input-border-color:rgba(255,255,255,.25)] [--flux-input-color:#ffffff] [--flux-input-placeholder-color:rgba(255,255,255,.65)] [&_label]:!text-white [&_label]:!opacity-100"
+                />
+
                 @if (Route::has('password.request'))
-                    <flux:link class="mt-2 inline-block text-sm text-teal-300" :href="route('password.request')" wire:navigate>Forgot your password?</flux:link>
+                    <flux:link
+                        class="mt-2 inline-block text-sm font-semibold !text-teal-300 hover:!text-teal-200"
+                        :href="route('password.request')"
+                        wire:navigate
+                    >
+                        Forgot your password?
+                    </flux:link>
                 @endif
             </div>
-            <flux:checkbox name="remember" :label="__('Remember me on this device')" :checked="old('remember')" />
-            <flux:button variant="primary" type="submit" class="mt-2 w-full py-3 text-base" data-test="login-button">Sign in →</flux:button>
+
+            <div class="rounded-lg border border-white/15 bg-white/5 px-3 py-3">
+                <flux:checkbox
+                    name="remember"
+                    :label="__('Remember me on this device')"
+                    :checked="old('remember')"
+                    class="[--flux-checkbox-label-color:#ffffff] text-white [&_label]:!text-white [&_label]:!opacity-100 [&_span]:!text-white"
+                />
+            </div>
+
+            <flux:button
+                variant="primary"
+                type="submit"
+                class="mt-2 w-full py-3 text-base font-bold"
+                data-test="login-button"
+            >
+                Sign in →
+            </flux:button>
         </form>
 
-        <p class="mt-7 text-center text-xs leading-5 text-teal-50/40">Your approved role and institution access are applied automatically after sign-in.</p>
+        <p class="mt-7 text-center text-xs leading-5 !text-white/80">
+            Your approved role and institution access are applied automatically after sign-in.
+        </p>
+
+        <div class="mt-6 border-t border-white/15 pt-6">
+            <p class="mb-4 text-center text-xs font-semibold uppercase tracking-wider !text-white/60">
+                Or sign in another way
+            </p>
+
+            <x-passkey-verify />
+        </div>
     </flux:card>
 </x-layouts::auth>
+
+<style>
+    .login-card label,
+    .login-card label span,
+    .login-card label div,
+    .login-card p,
+    .login-card [data-flux-label] {
+        color: #ffffff !important;
+        opacity: 1 !important;
+    }
+
+    .login-card input {
+        color: #ffffff !important;
+    }
+
+    .login-card input::placeholder {
+        color: rgba(255, 255, 255, 0.65) !important;
+        opacity: 1 !important;
+    }
+
+    .login-card a {
+        color: #2ee8d0;
+    }
+
+    .login-card a:hover {
+        color: #99f6e4;
+    }
+</style>

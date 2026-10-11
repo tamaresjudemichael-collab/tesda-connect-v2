@@ -172,20 +172,44 @@ $save = function (): void {
             [...$validated, 'submitted_at' => now()],
         );
 
-        $application = EnrollmentApplication::updateOrCreate(
-            ['learner_user_id' => $user->id],
-            [
-                'reference_no' => 'TC-'.now()->format('Y').'-'.str_pad((string) $user->id, 4, '0', STR_PAD_LEFT),
-                'institution_id' => $profile->institution_id,
-                'course_id' => $profile->course_id,
-                'learner_name' => trim(implode(' ', array_filter([$profile->first_name, $profile->middle_name, $profile->last_name, $profile->extension_name]))),
-                'email' => $user->email,
-                'contact_number' => $profile->contact_number,
-                'application_status' => 'submitted',
-                'record_completeness' => 70,
-                'submitted_at' => now(),
-            ],
+        
+$existingApplication = EnrollmentApplication::where(
+    'learner_user_id',
+    $user->id
+)->first();
+
+$referenceNo = $existingApplication?->reference_no;
+
+if (! $referenceNo) {
+    do {
+        $referenceNo = 'TC-'.now()->format('Y').'-'.strtoupper(
+            \Illuminate\Support\Str::random(8)
         );
+    } while (
+        EnrollmentApplication::where('reference_no', $referenceNo)->exists()
+    );
+}
+
+    $application = EnrollmentApplication::updateOrCreate(
+        ['learner_user_id' => $user->id],
+        [
+            'reference_no' => $referenceNo,
+            'institution_id' => $profile->institution_id,
+            'course_id' => $profile->course_id,
+            'learner_name' => trim(implode(' ', array_filter([
+                $profile->first_name,
+                $profile->middle_name,
+                $profile->last_name,
+                $profile->extension_name,
+            ]))),
+            'email' => $user->email,
+            'contact_number' => $profile->contact_number,
+            'application_status' => 'submitted',
+            'record_completeness' => 70,
+            'submitted_at' => now(),
+        ],
+    );
+
 
         foreach (['valid_id' => 'valid_id', 'profile_photo' => 'profile_photo'] as $property => $type) {
             if (! $this->{$property}) {
