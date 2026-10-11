@@ -12,4 +12,9 @@
 @fonts
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
+<script>
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+    localStorage.setItem('flux.appearance', 'light');
+</script>
 @fluxAppearance

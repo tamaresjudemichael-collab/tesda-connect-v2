@@ -1,6 +1,5 @@
-
 <x-layouts::auth :title="__('Sign in')">
-    <flux:card class="login-card border border-white/15 bg-[#102120]/95 p-6 text-white shadow-2xl shadow-black/30 sm:p-10">
+    <flux:card class="login-card border border-white/15 bg-[#102120]/95 p-6 !text-white shadow-2xl shadow-black/30 sm:p-10">
         <div class="flex items-start justify-between gap-4">
             <div>
                 <flux:heading size="xl" class="text-3xl font-black tracking-tight !text-white">
@@ -30,7 +29,7 @@
         <form method="POST" action="{{ route('login.store') }}" class="mt-7 flex flex-col gap-5">
             @csrf
 
-            <flux:input
+                        <flux:input
                 name="email"
                 :label="__('Email address')"
                 :value="old('email', app()->environment('local') ? 'admin@tesdaconnect.test' : '')"
@@ -39,8 +38,7 @@
                 autofocus
                 autocomplete="email"
                 placeholder="you@example.com"
-                class="[--flux-input-background:rgba(255,255,255,.08)] [--flux-input-border-color:rgba(255,255,255,.25)] [--flux-input-color:#ffffff] [--flux-input-placeholder-color:rgba(255,255,255,.65)] [&_label]:!text-white [&_label]:!opacity-100"
-            />
+class="[--flux-input-background:#ffffff] [--flux-input-border-color:#d1d5db] [--flux-input-color:#111827] [--flux-input-placeholder-color:#6b7280] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"            />
 
             <div class="relative">
                 <flux:input
@@ -52,8 +50,7 @@
                     :value="app()->environment('local') ? 'admin123' : ''"
                     :placeholder="__('Enter your password')"
                     viewable
-                    class="[--flux-input-background:rgba(255,255,255,.08)] [--flux-input-border-color:rgba(255,255,255,.25)] [--flux-input-color:#ffffff] [--flux-input-placeholder-color:rgba(255,255,255,.65)] [&_label]:!text-white [&_label]:!opacity-100"
-                />
+class="[--flux-input-background:#ffffff] [--flux-input-border-color:#d1d5db] [--flux-input-color:#111827] [--flux-input-placeholder-color:#6b7280] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"                />
 
                 @if (Route::has('password.request'))
                     <flux:link
@@ -71,8 +68,7 @@
                     name="remember"
                     :label="__('Remember me on this device')"
                     :checked="old('remember')"
-                    class="[--flux-checkbox-label-color:#ffffff] text-white [&_label]:!text-white [&_label]:!opacity-100 [&_span]:!text-white"
-                />
+class="[--flux-checkbox-label-color:#ffffff] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"                />
             </div>
 
             <flux:button
@@ -100,29 +96,33 @@
 </x-layouts::auth>
 
 <style>
-    .login-card label,
-    .login-card label span,
-    .login-card label div,
-    .login-card p,
-    .login-card [data-flux-label] {
-        color: #ffffff !important;
-        opacity: 1 !important;
-    }
+    .login-card [data-flux-label],
+.login-card [data-flux-label] *,
+.login-card label,
+.login-card label span {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
 
-    .login-card input {
-        color: #ffffff !important;
-    }
+.login-card input[data-flux-control],
+.login-card textarea[data-flux-control],
+.login-card select[data-flux-control] {
+    color: #111827 !important;
+    background-color: #ffffff !important;
+}
 
-    .login-card input::placeholder {
-        color: rgba(255, 255, 255, 0.65) !important;
-        opacity: 1 !important;
-    }
+.login-card input[data-flux-control]::placeholder,
+.login-card textarea[data-flux-control]::placeholder {
+    color: #6b7280 !important;
+    opacity: 1 !important;
+}
 
-    .login-card a {
-        color: #2ee8d0;
-    }
+.login-card [data-flux-checkbox] {
+    color: #ffffff !important;
+}
 
-    .login-card a:hover {
-        color: #99f6e4;
-    }
+.login-card [data-flux-checkbox] label,
+.login-card [data-flux-checkbox] label span {
+    color: #ffffff !important;
+}
 </style>

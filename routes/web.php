@@ -5,7 +5,7 @@ use Livewire\Volt\Volt;
 
 Route::view('/', 'welcome')->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Volt::route('dashboard', 'dashboard')->name('dashboard');
 
     Volt::route('enrollments', 'enrollments.index')

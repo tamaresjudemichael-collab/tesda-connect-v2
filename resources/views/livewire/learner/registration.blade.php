@@ -241,7 +241,9 @@ if (! $referenceNo) {
 };
 ?>
 
-<div class="mx-auto max-w-5xl space-y-6">
+
+<div class="learner-registration-page mx-auto max-w-5xl space-y-6">
+
     <div>
         <p class="text-sm font-semibold text-cyan-600">Digital MIS 03-01</p>
         <flux:heading size="xl" class="mt-1 text-3xl font-black">Learner Registration Form</flux:heading>
@@ -334,3 +336,4 @@ if (! $referenceNo) {
         <flux:card class="border-emerald-100 bg-emerald-50 p-6 shadow-sm"><flux:heading size="lg">8. Privacy consent and electronic submission</flux:heading><p class="mt-3 text-sm leading-6 text-emerald-900/75">I attest that the information in this learner profile is true and correct. I consent to TESDA processing my personal information for training, scholarship, employment, survey, and other related TESDA programs that may be beneficial to my qualifications.</p><flux:checkbox wire:model="privacy_consent" class="mt-5" label="Agree — I have read the Privacy Notice and consent to electronic submission." required /><div class="mt-6 flex justify-end"><flux:button type="submit" variant="primary" icon="paper-airplane">Submit learner registration</flux:button></div></flux:card>
     </form>
 </div>
+ 

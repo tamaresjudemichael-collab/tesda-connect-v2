@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="bg-[#061312]">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class=" ">
     <head>
         @include('partials.head')
     </head>
