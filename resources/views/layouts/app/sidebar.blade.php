@@ -611,6 +611,9 @@
                         <flux:sidebar.item icon="book-open" :href="route('focal.courses')" :current="request()->routeIs('focal.courses')" wire:navigate>
                             Register, Update &amp; Archive Courses
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="folder-open" :href="route('learning.materials')" :current="request()->routeIs('learning.materials')" wire:navigate>
+                            Course Learning Materials
+                        </flux:sidebar.item>
                     </flux:sidebar.group>
 
                     <flux:sidebar.group heading="CERTIFICATION MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-certification" class="grid text-blue-200">
@@ -646,6 +649,9 @@
                     <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="learner-dashboard" class="grid text-blue-200">
                         <flux:sidebar.item icon="home" :href="route('learner.portal')" :current="request()->routeIs('learner.portal')" wire:navigate>
                             Student / Scholar Dashboard
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="book-open" :href="route('learning.my-materials')" :current="request()->routeIs('learning.my-materials')" wire:navigate>
+                            My Course Materials
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 

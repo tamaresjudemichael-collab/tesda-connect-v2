@@ -7,6 +7,7 @@ use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\TrainingCertificateController;
 use App\Http\Controllers\EnrollmentBatchForwardingController;
 use App\Http\Controllers\AnnouncementAttachmentController;
+use App\Http\Controllers\CourseMaterialDownloadController;
 
 Route::view('/', 'welcome')->name('home');
 
@@ -52,6 +53,17 @@ Volt::route('competency-progress', 'progress.competency')
     Volt::route('announcements', 'announcements.index')
         ->middleware('role:administrator,registrar,focal_person')
         ->name('announcements.index');
+
+    Volt::route('learning/materials', 'learning.materials')
+        ->middleware('role:administrator,focal_person')
+        ->name('learning.materials');
+
+    Volt::route('my-learning/materials', 'learning.my-materials')
+        ->middleware('role:applicant,scholar')
+        ->name('learning.my-materials');
+
+    Route::get('/course-materials/{material}/download', CourseMaterialDownloadController::class)
+        ->name('course-materials.download');
 
     Volt::route('certification', 'certification.index')
         ->middleware('role:administrator,focal_person')

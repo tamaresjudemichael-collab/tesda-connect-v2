@@ -1,0 +1,131 @@
+--- a/tests/Feature/StudentScholarWorkspaceTest.php
++++ b/tests/Feature/StudentScholarWorkspaceTest.php
+@@ -3,7 +3,9 @@
+ use App\Models\Announcement;
+ use App\Models\Course;
+ use App\Models\EnrollmentApplication;
++use App\Models\EnrollmentStatusHistory;
+ use App\Models\Institution;
++use App\Models\LearnerDocument;
+ use App\Models\TrainingBatch;
+ use App\Models\User;
+ use Illuminate\Support\Str;
+@@ -88,9 +90,9 @@
+         ->assertSee('Unread Announcements')
+         ->assertSee('1 unread');
+ 
+-    $view = $deadline->views()->first();
+-
+-    expect($deadline->views()->count())->toBe(1)
++    $view = $deadline->views()->first();
++
++    expect($deadline->views()->count())->toBe(1)
+         ->and($view?->read_at)->toBeNull();
+ });
+ 
+@@ -120,3 +122,105 @@
+         ->get(route('learner.requirements'))
+         ->assertForbidden();
+ });
++
++test('learner dashboard shows their enrollment status timeline and revision instructions', function () {
++    $fixture = makeStudentScholarWorkspaceFixture();
++    $application = $fixture['application'];
++    $application->update([
++        'application_status' => 'returned_for_revision',
++        'remarks' => 'Please upload a clearer birth certificate.',
++    ]);
++
++    EnrollmentStatusHistory::query()->create([
++        'enrollment_application_id' => $application->id,
++        'reference_no' => $application->reference_no,
++        'from_status' => 'draft',
++        'to_status' => 'submitted',
++        'actor_user_id' => $fixture['learner']->id,
++        'reason' => 'Learner submitted the registration form.',
++    ]);
++    EnrollmentStatusHistory::query()->create([
++        'enrollment_application_id' => $application->id,
++        'reference_no' => $application->reference_no,
++        'from_status' => 'submitted',
++        'to_status' => 'returned_for_revision',
++        'actor_user_id' => null,
++        'reason' => 'Please upload a clearer birth certificate.',
++    ]);
++
++    $this->actingAs($fixture['learner'])
++        ->get(route('learner.portal'))
++        ->assertOk()
++        ->assertSee('Application progress')
++        ->assertSee($application->reference_no)
++        ->assertSee('Learner submitted the registration form.')
++        ->assertSee('Action required: revise your application')
++        ->assertSee('Please upload a clearer birth certificate.')
++        ->assertSee('Review and resubmit');
++});
++
++test('learner dashboard does not expose another learners enrollment status history', function () {
++    $fixture = makeStudentScholarWorkspaceFixture();
++    $other = makeStudentScholarWorkspaceFixture();
++
++    EnrollmentStatusHistory::query()->create([
++        'enrollment_application_id' => $other['application']->id,
++        'reference_no' => $other['application']->reference_no,
++        'from_status' => 'submitted',
++        'to_status' => 'returned_for_revision',
++        'actor_user_id' => null,
++        'reason' => 'PRIVATE OTHER LEARNER REVISION NOTE',
++    ]);
++
++    $this->actingAs($fixture['learner'])
++        ->get(route('learner.portal'))
++        ->assertOk()
++        ->assertDontSee('PRIVATE OTHER LEARNER REVISION NOTE')
++        ->assertDontSee($other['application']->reference_no);
++});
++
++test('learner registration shows latest document review status and rejection remarks', function () {
++    $learner = User::factory()->create([
++        'role' => 'applicant',
++        'account_status' => 'active',
++    ]);
++
++    LearnerDocument::query()->create([
++        'user_id' => $learner->id,
++        'learner_profile_id' => null,
++        'document_type' => 'birth_certificate',
++        'original_name' => 'birth-certificate.pdf',
++        'path' => 'learner-documents/'.$learner->id.'/birth-certificate.pdf',
++        'mime_type' => 'application/pdf',
++        'size' => 1234,
++        'status' => 'rejected',
++        'remarks' => 'Please upload a clearer birth certificate.',
++    ]);
++
++    $otherLearner = User::factory()->create([
++        'role' => 'applicant',
++        'account_status' => 'active',
++    ]);
++    LearnerDocument::query()->create([
++        'user_id' => $otherLearner->id,
++        'learner_profile_id' => null,
++        'document_type' => 'birth_certificate',
++        'original_name' => 'private-document.pdf',
++        'path' => 'learner-documents/'.$otherLearner->id.'/private-document.pdf',
++        'mime_type' => 'application/pdf',
++        'size' => 1234,
++        'status' => 'rejected',
++        'remarks' => 'PRIVATE OTHER LEARNER DOCUMENT REMARK',
++    ]);
++
++    $this->actingAs($learner)
++        ->get(route('learner.registration'))
++        ->assertOk()
++        ->assertSee('Your latest document review')
++        ->assertSee('Birth certificate')
++        ->assertSee('Revision required')
++        ->assertSee('Please upload a clearer birth certificate.')
++        ->assertSee('View your submitted file')
++        ->assertDontSee('PRIVATE OTHER LEARNER DOCUMENT REMARK');
++});
++

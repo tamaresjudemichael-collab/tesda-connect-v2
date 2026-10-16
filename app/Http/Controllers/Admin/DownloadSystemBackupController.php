@@ -12,10 +12,10 @@ class DownloadSystemBackupController
     {
         abort_unless($request->user()?->role === 'administrator', 403);
 
-        // Accept only the application's SQLite backup naming convention. This prevents
+        // Accept only the application's backup naming conventions. This prevents
         // path traversal and blocks downloads of arbitrary files from storage.
         abort_unless(
-            preg_match('/\\Atesda-connect-db-[A-Za-z0-9_-]+\\.sqlite\\z/D', $filename) === 1
+            preg_match('/\\Atesda-connect-(?:db-[A-Za-z0-9_-]+\\.sqlite|system-[A-Za-z0-9_-]+\\.zip)\\z/D', $filename) === 1
             && basename($filename) === $filename,
             404
         );
@@ -32,7 +32,7 @@ class DownloadSystemBackupController
         );
 
         return response()->download($realPath, $filename, [
-            'Content-Type' => 'application/vnd.sqlite3',
+            'Content-Type' => str_ends_with($filename, '.zip') ? 'application/zip' : 'application/vnd.sqlite3',
             'Cache-Control' => 'private, no-store, max-age=0',
             'X-Content-Type-Options' => 'nosniff',
         ]);

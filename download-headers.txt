@@ -1,0 +1,11 @@
+HTTP/1.1 302 Found
+Host: 127.0.0.1:8000
+Connection: close
+X-Powered-By: PHP/8.3.33
+Cache-Control: no-cache, private
+Date: Fri, 16 Oct 2026 07:55:15 GMT
+Location: http://127.0.0.1:8000/login
+Content-Type: text/html; charset=utf-8
+Set-Cookie: XSRF-TOKEN=eyJpdiI6IkU0d1ZDY2xCaHJPLzhUUTBhSG5iWlE9PSIsInZhbHVlIjoia29MT3pvYWlwK21ISWpDOHJqRjVpRENpbzVvSVY5enZxV2hMUWIyQ0QwMy9aaEYzWUdPSW1hQUpuSXExdU9IVDZ1UFJHM3NENzJvM0w5Q3ArYWNSamhZN1RRbFk0eGlicnVZVklWYnMwMUdSYm9obmsxbDNKZ1dqMjRtczlyRTciLCJtYWMiOiJjNDljNGJlNGExZmQ0MzBiODVjNDk2OWRhM2MzZTdjZjlmMDRhNDUzZTYyZDdiNWY1MzczNDgyZWExZDQ1Y2I0IiwidGFnIjoiIn0%3D; expires=Fri, 16 Oct 2026 09:55:15 GMT; Max-Age=7200; path=/; samesite=lax
+Set-Cookie: tesdaconnect-session=eyJpdiI6IkNQSmk5ODZBcmdhbGRqY29ERlFWN0E9PSIsInZhbHVlIjoiVEZUcHhQcVdzdGNnL0pLV3B5cGxqNlVrSzVPdGRTb3YzUUdhZHM1OEZJcVBmNzNseXBTWm9PU1djeThjckZhZGd0K2VvazZlVGpUb0x4WHpMM0luVnhWRXVUSVdpZHVLWnU3OGQ5TTlFbmcweUNTb0hjcU50SVM5cjYvUm1EbHEiLCJtYWMiOiI2ZWQyMzMxNDEwYjAxNzhkODJhOGRmNWY5YjMzNGUzMzhmZGZiNzg4ZTZjODJjN2VhODYyNzhjMTRiYTJkM2U0IiwidGFnIjoiIn0%3D; expires=Fri, 16 Oct 2026 09:55:15 GMT; Max-Age=7200; path=/; httponly; samesite=lax
+

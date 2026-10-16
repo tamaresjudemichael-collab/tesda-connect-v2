@@ -28,7 +28,7 @@
 
             <section class="relative z-10 mx-auto grid max-w-7xl gap-12 px-6 py-20 lg:grid-cols-[1.08fr_.92fr] lg:px-10 lg:py-28">
                 <div class="max-w-2xl">
-                    <p class="mb-7 inline-flex rounded-full border border-teal-300/25 bg-teal-300/10 px-4 py-2 text-xs font-bold tracking-[.16em] text-teal-300">MAMBURAO INTEGRATED FARM</p>
+                    <p class="mb-7 inline-flex rounded-full border border-teal-300/25 bg-teal-300/10 px-4 py-2 text-xs font-bold tracking-[.16em] text-teal-300">MAMBURAO INTEGRATED FARM · BALLI SCHOOL OF TECHNOLOGY</p>
                     <h1 class="text-5xl font-black leading-[.94] tracking-tight sm:text-6xl lg:text-7xl">Streamlining <span class="text-teal-400">TESDA</span><br>Training Operations</h1>
                     <p class="mt-7 max-w-xl text-lg leading-8 text-teal-50/70">A role-based training operations platform for learner intake, schedule coordination, progress monitoring, and report readiness.</p>
                     <div class="mt-9 flex flex-wrap gap-3">
@@ -58,6 +58,30 @@
                 </div>
             </section>
         </div>
+
+        <section id="programs" class="bg-[#082746] px-6 py-16 lg:px-10">
+            <div class="mx-auto max-w-6xl">
+                <p class="text-sm font-bold uppercase tracking-[.18em] text-cyan-300">Choose your institution</p>
+                <h2 class="mt-3 text-3xl font-black">Two institutions, one connected platform.</h2>
+                <p class="mt-3 max-w-3xl text-sm leading-6 text-blue-100/70">Choose the institution relevant to your training. Records and staff access remain separated by the system's assigned-institution permissions.</p>
+                <div class="mt-8 grid gap-5 md:grid-cols-2">
+                    <article class="rounded-2xl border border-teal-300/20 bg-white/5 p-6">
+                        <span class="inline-flex rounded-full bg-teal-300/10 px-3 py-1 text-xs font-bold tracking-wider text-teal-200">MIF</span>
+                        <h3 class="mt-4 text-2xl font-black">Mamburao Integrated Farm</h3>
+                        <p class="mt-3 text-sm leading-6 text-blue-100/75">Find enrollment procedures, training schedules, progress information, and course learning resources for your institution.</p>
+                        <ul class="mt-5 space-y-2 text-sm text-blue-50"><li>• Online registration and requirements</li><li>• Training schedule and progress tracking</li><li>• Course learning materials</li></ul>
+                        <a href="{{ route('login') }}" class="mt-6 inline-flex rounded-lg bg-teal-400 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-teal-300">Continue to sign in →</a>
+                    </article>
+                    <article class="rounded-2xl border border-amber-300/20 bg-white/5 p-6">
+                        <span class="inline-flex rounded-full bg-amber-300/10 px-3 py-1 text-xs font-bold tracking-wider text-amber-200">BST</span>
+                        <h3 class="mt-4 text-2xl font-black">Balli School of Technology</h3>
+                        <p class="mt-3 text-sm leading-6 text-blue-100/75">Find enrollment procedures, training schedules, progress information, and course learning resources for your institution.</p>
+                        <ul class="mt-5 space-y-2 text-sm text-blue-50"><li>• Online registration and requirements</li><li>• Training schedule and progress tracking</li><li>• Course learning materials</li></ul>
+                        <a href="{{ route('login') }}" class="mt-6 inline-flex rounded-lg bg-amber-300 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-200">Continue to sign in →</a>
+                    </article>
+                </div>
+            </div>
+        </section>
 
         <section id="features" class="bg-[#0b2151] px-6 py-20 lg:px-10">
             <div class="mx-auto max-w-6xl">

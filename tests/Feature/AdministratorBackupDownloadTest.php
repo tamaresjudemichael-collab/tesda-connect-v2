@@ -74,3 +74,26 @@ it('does not allow traversal or downloading files outside the backup naming conv
         ->get(route('system.backups.download', ['filename' => 'laravel.log']))
         ->assertNotFound();
 });
+
+
+it('allows an administrator to download a full system backup archive', function () {
+    $admin = User::factory()->create([
+        'role' => 'administrator',
+        'account_status' => 'active',
+    ]);
+
+    $directory = storage_path('app/backups');
+    File::ensureDirectoryExists($directory);
+    $filename = 'tesda-connect-system-20261016-044335-testzip.zip';
+    $path = $directory.DIRECTORY_SEPARATOR.$filename;
+    File::put($path, 'test archive bytes');
+
+    try {
+        $response = $this->actingAs($admin)->get(route('system.backups.download', ['filename' => $filename]));
+        $response->assertOk();
+        $response->assertDownload($filename);
+        $response->assertHeader('Content-Type', 'application/zip');
+    } finally {
+        File::delete($path);
+    }
+});

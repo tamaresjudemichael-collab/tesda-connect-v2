@@ -23,6 +23,11 @@ class Course extends Model
         return $this->belongsTo(Institution::class);
     }
 
+    public function materials(): HasMany
+    {
+        return $this->hasMany(CourseMaterial::class);
+    }
+
     public function batches(): HasMany
     {
         return $this->hasMany(TrainingBatch::class);

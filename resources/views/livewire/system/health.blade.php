@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use App\Support\ActivityLogger;
 use App\Support\SqliteDatabaseBackup;
+use App\Support\SystemBackupArchive;
 use function Livewire\Volt\{computed, layout, state, title};
 
 layout('layouts::app');
@@ -13,6 +14,8 @@ title('System Health');
 state([
     'backupResult' => null,
     'backupError' => null,
+    'systemBackupResult' => null,
+    'systemBackupError' => null,
 ]);
 
 $createBackup = function (): void {
@@ -61,6 +64,56 @@ $createBackup = function (): void {
     } catch (Throwable $exception) {
         report($exception);
         $this->backupError = 'Backup failed. Check the SQLite database path, backup-folder permissions, and Laravel logs for details.';
+    }
+};
+
+$createSystemBackup = function (): void {
+    abort_unless(auth()->check() && auth()->user()->role === 'administrator', 403);
+
+    $this->systemBackupResult = null;
+    $this->systemBackupError = null;
+
+    try {
+        $connection = DB::connection();
+        if ($connection->getDriverName() !== 'sqlite') {
+            throw new RuntimeException('Full system backup currently supports SQLite databases only.');
+        }
+
+        $databasePath = (string) $connection->getDatabaseName();
+        if ($databasePath === '' || $databasePath === ':memory:' || ! File::isFile($databasePath)) {
+            throw new RuntimeException('A persistent SQLite database file could not be found at the configured database path.');
+        }
+
+        $result = app(SystemBackupArchive::class)->create(
+            $connection->getPdo(),
+            storage_path('app/backups'),
+            storage_path('app/private')
+        );
+
+        $this->systemBackupResult = $result;
+        try {
+            ActivityLogger::record(
+                'system_backup_created',
+                'Created and verified a full system backup containing the SQLite database and private local files.',
+                null,
+                [
+                    'file_name' => $result['name'],
+                    'size_bytes' => $result['size_bytes'],
+                    'database_integrity_check' => $result['database_integrity'],
+                    'private_file_count' => $result['private_file_count'],
+                    'manifest_sha256' => $result['manifest_sha256'],
+                ]
+            );
+        } catch (Throwable $loggingException) {
+            report($loggingException);
+        }
+
+        unset($this->health);
+    } catch (Throwable $exception) {
+        report($exception);
+        $this->systemBackupError = $exception instanceof RuntimeException && str_contains($exception->getMessage(), 'PHP zip extension')
+            ? 'Full backup unavailable because the PHP zip extension is not enabled. Enable extension=zip in the active php.ini and restart Apache.'
+            : 'Full backup failed. Check the database path, private storage permissions, free disk space, PHP zip extension, and Laravel logs.';
     }
 };
 
@@ -135,7 +188,7 @@ $health = computed(function (): array {
     usort($backupCandidates, fn (array $a, array $b) => $b['modified'] <=> $a['modified']);
     $latestBackup = $backupCandidates[0] ?? null;
 
-    // Only list SQLite database backups from the configured application backup directory.
+    // Only list approved SQLite snapshots and full system archives from the configured backup directory.
     // Names are validated again by the download controller before any file is served.
     $downloadableBackups = [];
     $configuredBackupDirectory = storage_path('app/backups');
@@ -143,7 +196,7 @@ $health = computed(function (): array {
         if (File::isDirectory($configuredBackupDirectory)) {
             foreach (File::files($configuredBackupDirectory) as $file) {
                 $filename = $file->getFilename();
-                if (! $file->isFile() || ! preg_match('/\Atesda-connect-db-[A-Za-z0-9_-]+\.sqlite\z/D', $filename)) {
+                if (! $file->isFile() || ! preg_match('/\Atesda-connect-(?:db-[A-Za-z0-9_-]+\.sqlite|system-[A-Za-z0-9_-]+\.zip)\z/D', $filename)) {
                     continue;
                 }
 
@@ -196,12 +249,25 @@ $health = computed(function (): array {
 
     <div class="grid gap-6 lg:grid-cols-2">
         <flux:card class="p-5 shadow-sm sm:p-6">
-            <div class="flex flex-wrap items-start justify-between gap-3"><div><flux:heading size="lg">Backup status</flux:heading><flux:text class="mt-1">Create a verified SQLite snapshot in <code>storage/app/backups</code>.</flux:text></div><flux:button variant="primary" icon="arrow-path" wire:click="createBackup" wire:loading.attr="disabled" wire:target="createBackup"><span wire:loading.remove wire:target="createBackup">Create backup</span><span wire:loading wire:target="createBackup">Creating backup…</span></flux:button></div>
+            <div class="flex flex-wrap items-start justify-between gap-3"><div><flux:heading size="lg">Backup status</flux:heading><flux:text class="mt-1">Create a verified SQLite snapshot or a full archive containing the database and private local files in <code>storage/app/backups</code>.</flux:text></div><flux:button variant="primary" icon="arrow-path" wire:click="createBackup" wire:loading.attr="disabled" wire:target="createBackup"><span wire:loading.remove wire:target="createBackup">Create backup</span><span wire:loading wire:target="createBackup">Creating backup…</span></flux:button>
+                <flux:button variant="primary" icon="archive-box" wire:click="createSystemBackup" wire:loading.attr="disabled" wire:target="createSystemBackup"><span wire:loading.remove wire:target="createSystemBackup">Create full backup</span><span wire:loading wire:target="createSystemBackup">Creating full backup…</span></flux:button></div>
             @if ($backupResult)
                 <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status" aria-live="polite"><div class="flex items-center gap-2 font-semibold text-emerald-800"><flux:icon icon="check-circle" class="size-5" /> Backup created and verified</div><p class="mt-2 break-all text-sm text-slate-800">{{ $backupResult['name'] }}</p><p class="mt-1 text-sm text-slate-600">{{ $backupResult['created_at'] }} · {{ number_format($backupResult['size'] / 1048576, 2) }} MB · SQLite integrity check: {{ strtoupper($backupResult['integrity']) }}</p><p class="mt-2 break-all text-xs text-emerald-900">{{ $backupResult['path'] }}</p></div>
             @endif
             @if ($backupError)
                 <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900" role="alert">{{ $backupError }}</div>
+            @endif
+            @if ($systemBackupResult)
+                <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status" aria-live="polite">
+                    <div class="flex items-center gap-2 font-semibold text-emerald-800"><flux:icon icon="check-circle" class="size-5" /> Full system backup created and verified</div>
+                    <p class="mt-2 break-all text-sm text-slate-800">{{ $systemBackupResult['name'] }}</p>
+                    <p class="mt-1 text-sm text-slate-600">{{ $systemBackupResult['created_at'] }} · {{ number_format($systemBackupResult['size_bytes'] / 1048576, 2) }} MB · Database integrity: {{ strtoupper($systemBackupResult['database_integrity']) }} · Private files: {{ $systemBackupResult['private_file_count'] }}</p>
+                    <p class="mt-2 break-all text-xs text-emerald-900">Manifest SHA-256: {{ $systemBackupResult['manifest_sha256'] }}</p>
+                    <a class="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-emerald-900 underline" href="{{ route('system.backups.download', ['filename' => $systemBackupResult['name']]) }}"><flux:icon icon="arrow-down-tray" class="size-4" /> Download full backup</a>
+                </div>
+            @endif
+            @if ($systemBackupError)
+                <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900" role="alert">{{ $systemBackupError }}</div>
             @endif
             @if ($this->health['latest_backup'])
                 <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div class="flex items-center gap-2 font-semibold text-emerald-800"><flux:icon icon="check-circle" class="size-5" /> Backup file found</div><p class="mt-2 break-all text-sm text-slate-800">{{ $this->health['latest_backup']['name'] }}</p><p class="mt-1 text-sm text-slate-600">{{ \Illuminate\Support\Carbon::createFromTimestamp($this->health['latest_backup']['modified'])->format('M d, Y h:i A') }} · {{ $this->health['backup_size'] }}</p></div>
@@ -213,7 +279,7 @@ $health = computed(function (): array {
                 <div class="flex flex-wrap items-end justify-between gap-2">
                     <div>
                         <flux:heading size="base">Available backups</flux:heading>
-                        <flux:text class="mt-1 text-sm">Download a dated SQLite backup saved on this server.</flux:text>
+                        <flux:text class="mt-1 text-sm">Download a dated SQLite snapshot (.sqlite) or full system archive (.zip) saved on this server.</flux:text>
                     </div>
                     <span class="text-xs text-slate-500">{{ count($this->health['backup_files']) }} file(s)</span>
                 </div>
@@ -224,7 +290,11 @@ $health = computed(function (): array {
                             <div class="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between" wire:key="backup-file-{{ md5($backup['name']) }}">
                                 <div class="min-w-0">
                                     <p class="break-all text-sm font-semibold text-slate-800">{{ $backup['name'] }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">{{ \Illuminate\Support\Carbon::createFromTimestamp($backup['modified'])->format('M d, Y h:i:s A') }} · {{ $backup['size_label'] }}</p>
+                                    <p class="mt-1 text-xs text-slate-500">
+                                        {{ \Illuminate\Support\Carbon::createFromTimestamp(
+    $backup['modified'],
+    config('app.timezone')
+) }} · {{ $backup['size_label'] }}</p>
                                 </div>
                                 <a href="{{ route('system.backups.download', ['filename' => $backup['name']]) }}" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#173b78] hover:bg-blue-50 hover:text-[#173b78] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label="Download backup from {{ \Illuminate\Support\Carbon::createFromTimestamp($backup['modified'])->format('M d, Y h:i A') }}">
                                     <flux:icon icon="arrow-down-tray" class="size-4" />
@@ -234,7 +304,7 @@ $health = computed(function (): array {
                         @endforeach
                     </div>
                 @else
-                    <div class="mt-3 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">No downloadable SQLite backups found in <code>storage/app/backups</code>.</div>
+                    <div class="mt-3 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">No downloadable database or full system backups found in <code>storage/app/backups</code>.</div>
                 @endif
             </div>
         </flux:card>
@@ -246,5 +316,5 @@ $health = computed(function (): array {
         </flux:card>
     </div>
 
-    <flux:card class="p-5 shadow-sm sm:p-6"><div class="flex flex-wrap items-start justify-between gap-3"><div><flux:heading size="lg">Health notes</flux:heading><flux:text class="mt-1">Interpretation of the checks above.</flux:text></div><flux:button variant="ghost" icon="arrow-path" wire:click="$refresh">Refresh checks</flux:button></div><ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-600"><li>A successful database check confirms the current PHP process can execute a simple query; it is not a full performance test.</li><li>Server sync records reflect mutations accepted by the server. Pending local records remain on each user's browser until synchronized.</li><li>Create backup uses SQLite VACUUM INTO and then runs PRAGMA integrity_check. A successful integrity check does not replace a restore test.</li><li>Storage usage covers <code>storage/app</code>; free space is reported for the volume containing the application path.</li></ul></flux:card>
+    <flux:card class="p-5 shadow-sm sm:p-6"><div class="flex flex-wrap items-start justify-between gap-3"><div><flux:heading size="lg">Health notes</flux:heading><flux:text class="mt-1">Interpretation of the checks above.</flux:text></div><flux:button variant="ghost" icon="arrow-path" wire:click="$refresh">Refresh checks</flux:button></div><ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-600"><li>A successful database check confirms the current PHP process can execute a simple query; it is not a full performance test.</li><li>Server sync records reflect mutations accepted by the server. Pending local records remain on each user's browser until synchronized.</li><li>SQLite backup uses VACUUM INTO and PRAGMA integrity_check. Full system backup also includes private local files, a SHA-256 manifest, and archive checksum validation; neither check replaces a restore test.</li><li>Keep a second copy of full backups off this computer. A backup stored only on the same server may be lost with the server.</li><li>Storage usage covers <code>storage/app</code>; free space is reported for the volume containing the application path.</li></ul></flux:card>
 </div>

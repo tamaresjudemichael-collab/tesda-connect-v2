@@ -16,7 +16,7 @@ layout('layouts::app');
 title('Student / Scholar Dashboard');
 
 $application = computed(fn () => EnrollmentApplication::query()
-    ->with(['course', 'trainingBatch', 'institution'])
+    ->with(['course', 'trainingBatch', 'institution', 'statusHistories'])
     ->where('learner_user_id', auth()->id())
     ->latest()
     ->first());
@@ -223,6 +223,15 @@ $certificateEligibility = computed(fn () => $this->application
     $portalAttendanceSummary = $this->attendanceSummary;
     $portalCertificate = $this->trainingCertificate;
     $portalCertificateEligibility = $this->certificateEligibility;
+    $portalStatusHistory = $record?->statusHistories?->sortBy('created_at')->values() ?? collect();
+    $applicationGuidance = match ($record?->application_status) {
+        'draft' => ['title' => 'Continue your application', 'body' => 'Complete the required fields and documents, then submit your registration.', 'action' => true],
+        'submitted', 'under_review' => ['title' => 'Your application is being reviewed', 'body' => 'Your submission is in the Registrar review queue. Check this page for updates or requests for revision.', 'action' => false],
+        'returned_for_revision' => ['title' => 'Action required: revise your application', 'body' => $record?->remarks ?: 'Review any rejected documents below, update the requested information, and resubmit your application.', 'action' => true],
+        'verified' => ['title' => 'Requirements verified', 'body' => 'Your submitted requirements have been verified. Wait for enrollment confirmation and Scholar ID issuance.', 'action' => false],
+        'confirmed' => ['title' => 'Enrollment confirmed', 'body' => 'Your enrollment is confirmed. Use this dashboard to follow class schedules, learning materials, and training progress.', 'action' => false],
+        default => ['title' => 'Start your online application', 'body' => 'Complete your learner profile and upload the required documents to submit your application online.', 'action' => true],
+    };
     $studentStatus = $this->studentStatus;
     $nextClassBatch = $this->nextClassBatch;
     $upcomingDeadlines = $this->upcomingDeadlines;
@@ -389,6 +398,45 @@ $certificateEligibility = computed(fn () => $this->application
 
 
  
+        <section class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.75fr)]" aria-label="Enrollment tracking">
+            <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h3 class="text-xl font-black text-slate-900">Application progress</h3>
+                        <p class="mt-1 text-sm text-slate-500">Reference number: <span class="font-semibold text-slate-700">{{ $record->reference_no }}</span></p>
+                    </div>
+                    <span class="inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold {{ $record->application_status === 'confirmed' ? 'bg-emerald-50 text-emerald-700' : ($record->application_status === 'returned_for_revision' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800') }}">{{ str($record->application_status)->headline() }}</span>
+                </div>
+                <div class="mt-6 space-y-0">
+                    @forelse ($portalStatusHistory as $history)
+                        <div wire:key="enrollment-history-{{ $history->id }}" class="relative flex gap-3 pb-5 last:pb-0">
+                            @if (! $loop->last)<span class="absolute left-[9px] top-5 h-full w-px bg-slate-200" aria-hidden="true"></span>@endif
+                            <span class="relative mt-1 h-5 w-5 shrink-0 rounded-full border-4 border-blue-100 bg-blue-600" aria-hidden="true"></span>
+                            <div class="min-w-0 flex-1">
+                                <p class="font-bold text-slate-800">{{ str($history->to_status)->headline() }}</p>
+                                <p class="mt-0.5 text-xs text-slate-500">{{ $history->created_at?->format('M d, Y · h:i A') }}</p>
+                                @if (filled($history->reason))<p class="mt-2 whitespace-pre-line text-sm leading-5 text-slate-600">{{ $history->reason }}</p>@endif
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-sm text-slate-500">No status history has been recorded yet. Your current status is {{ str($record->application_status)->headline() }}.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            <aside class="rounded-3xl border {{ $record->application_status === 'returned_for_revision' ? 'border-rose-200 bg-rose-50' : 'border-blue-100 bg-blue-50/70' }} p-6 sm:p-7">
+                <p class="text-xs font-bold uppercase tracking-wider {{ $record->application_status === 'returned_for_revision' ? 'text-rose-700' : 'text-blue-700' }}">Your next step</p>
+                <h3 class="mt-2 text-lg font-black text-slate-900">{{ $applicationGuidance['title'] }}</h3>
+                <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{{ $applicationGuidance['body'] }}</p>
+                @if ($applicationGuidance['action'])
+                    <a href="{{ route('learner.registration') }}" wire:navigate class="mt-5 inline-flex items-center justify-center rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">{{ $record->application_status === 'returned_for_revision' ? 'Review and resubmit' : 'Continue registration' }}</a>
+                @endif
+                @if ($record->submitted_at)
+                    <p class="mt-4 text-xs text-slate-500">Last submitted: {{ $record->submitted_at->format('M d, Y · h:i A') }}</p>
+                @endif
+            </aside>
+        </section>
+
 <style>
     @@media print {
         @page {

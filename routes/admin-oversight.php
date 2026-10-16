@@ -10,6 +10,6 @@ Route::middleware(['auth', 'active', 'role:administrator'])->group(function (): 
     Volt::route('system/duration-compliance', 'system.duration-compliance')->name('system.duration-compliance');
     Volt::route('system/health', 'system.health')->name('system.health');
     Route::get('system/backups/{filename}/download', DownloadSystemBackupController::class)
-        ->where('filename', '[A-Za-z0-9._-]+')
+        ->where('filename', 'tesda-connect-(db-[A-Za-z0-9_-]+\.sqlite|system-[A-Za-z0-9_-]+\.zip)')
         ->name('system.backups.download');
 });

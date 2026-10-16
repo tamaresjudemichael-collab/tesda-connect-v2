@@ -80,6 +80,13 @@ $courses = computed(fn () => Course::query()
     ->orderBy('name')
     ->get());
 
+$documentStatuses = computed(fn () => LearnerDocument::query()
+    ->where('user_id', auth()->id())
+    ->orderByDesc('id')
+    ->get()
+    ->unique('document_type')
+    ->keyBy('document_type'));
+
 mount(function (): void {
     $profile = auth()->user()->learnerProfile;
 
@@ -561,6 +568,47 @@ if ($oldDocumentPaths !== []) {
 
         <flux:card class="bg-white p-6 shadow-sm">
             <div class="mb-6"><flux:heading size="lg">7. Supporting documents</flux:heading><flux:text class="mt-1">Birth certificate is mandatory. TOR is required for High School Graduate or College Graduate. Marriage contract is required if married. Valid ID and profile photo are optional. Files are stored privately and are visible only to you and authorized TESDA staff.</flux:text></div>
+            @if ($this->documentStatuses->isNotEmpty())
+                @php
+                    $documentLabels = [
+                        'birth_certificate' => 'Birth certificate',
+                        'tor' => 'Transcript of Records (TOR)',
+                        'marriage_contract' => 'Marriage contract',
+                        'valid_id' => 'Valid ID',
+                        'profile_photo' => 'Profile photo',
+                    ];
+                @endphp
+                <div class="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h3 class="font-semibold text-slate-900">Your latest document review</h3>
+                    <p class="mt-1 text-sm text-slate-600">Check the review result below. If a document was rejected, read the staff remarks and upload a corrected replacement in this form.</p>
+                    <div class="mt-3 space-y-3">
+                        @foreach ($this->documentStatuses as $type => $document)
+                            <div wire:key="learner-document-status-{{ $document->id }}" class="rounded-lg border border-slate-200 bg-white p-3">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="font-medium text-slate-800">{{ $documentLabels[$type] ?? str($type)->headline() }}</span>
+                                    @if ($document->status === 'verified')
+                                        <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Approved</span>
+                                    @elseif ($document->status === 'rejected')
+                                        <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800">Revision required</span>
+                                    @else
+                                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Awaiting review</span>
+                                    @endif
+                                </div>
+                                <p class="mt-1 text-xs text-slate-500">{{ $document->original_name }} · Submitted {{ $document->created_at?->format('M d, Y') }}</p>
+                                @if ($document->status === 'rejected')
+                                    <p class="mt-2 text-sm text-rose-800"><strong>Staff remarks:</strong> {{ $document->remarks ?: 'Please review the document requirements and upload a corrected copy.' }}</p>
+                                    <p class="mt-1 text-sm text-slate-600">Choose a replacement file in the upload field below, then resubmit your registration.</p>
+                                @elseif ($document->status === 'verified')
+                                    <p class="mt-2 text-sm text-emerald-800">This document has been approved.</p>
+                                @else
+                                    <p class="mt-2 text-sm text-slate-600">No action is needed while staff review is in progress.</p>
+                                @endif
+                                <a class="mt-2 inline-block text-sm font-semibold text-cyan-700 underline" href="{{ route('learner-documents.download', $document) }}">View your submitted file</a>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
             <div class="grid gap-5 md:grid-cols-2">
                 <flux:input wire:model="birth_certificate" type="file" label="Birth certificate (required)" accept=".jpg,.jpeg,.png,.pdf" />
                 @if (in_array($educational_attainment, ['High School Graduate', 'College Graduate'], true))

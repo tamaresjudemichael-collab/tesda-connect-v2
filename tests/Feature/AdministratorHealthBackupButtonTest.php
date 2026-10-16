@@ -13,6 +13,7 @@ it('shows the create backup action on the administrator health page', function (
         ->get(route('system.health'))
         ->assertOk()
         ->assertSee('Create backup')
+        ->assertSee('Create full backup')
         ->assertSee('storage/app/backups');
 });
 
