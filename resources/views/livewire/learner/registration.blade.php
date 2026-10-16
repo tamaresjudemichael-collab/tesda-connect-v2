@@ -5,10 +5,13 @@ use App\Models\EnrollmentApplication;
 use App\Models\Institution;
 use App\Models\LearnerProfile;
 use App\Models\LearnerDocument;
+use App\Models\IntakePeriod;
+use App\Models\IntakeCourseQuota;
 use Flux\Flux;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use function Livewire\Volt\{computed, layout, mount, state, title, usesFileUploads};
+use Illuminate\Support\Facades\Storage;
 
 layout('layouts::app');
 title('Learner Registration Form');
@@ -49,9 +52,27 @@ state([
     'privacy_consent' => false,
     'valid_id' => null,
     'profile_photo' => null,
+    'birth_certificate' => null,
+    'tor' => null,
+    'marriage_contract' => null,
 ]);
 
-$institutions = computed(fn () => auth()->user()->institutions()->where('is_active', true)->orderBy('name')->get());
+
+$institutions = computed(function () {
+    $user = auth()->user();
+
+    if ($user->hasRole('applicant')) {
+        return Institution::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+    }
+
+    return $user->institutions()
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get();
+});
 
 $courses = computed(fn () => Course::query()
     ->where('institution_id', $this->institution_id)
@@ -104,6 +125,32 @@ $updatedInstitutionId = function (): void {
 $save = function (): void {
     $user = auth()->user();
 
+    $existingApplication = EnrollmentApplication::query()
+        ->where('learner_user_id', $user->id)
+        ->first();
+
+    if ($existingApplication && ! in_array($existingApplication->application_status, ['draft', 'returned_for_revision'], true)) {
+        Flux::toast(
+            variant: 'warning',
+            text: 'This enrollment is already submitted or finalized. Contact the Registrar if a correction is needed.'
+        );
+
+        return;
+    }
+
+    $needsUpload = function (string $documentType) use ($user): bool {
+        $latestDocument = LearnerDocument::query()
+            ->where('user_id', $user->id)
+            ->where('document_type', $documentType)
+            ->latest('id')
+            ->first();
+
+        return ! $latestDocument || $latestDocument->status === 'rejected';
+    };
+
+    $requiresTor = in_array($this->educational_attainment, ['High School Graduate', 'College Graduate'], true);
+    $requiresMarriageContract = $this->civil_status === 'Married';
+
     $validated = $this->validate([
         'institution_id' => ['required', Rule::exists('institutions', 'id')->where('is_active', true)],
         'course_id' => [
@@ -146,9 +193,12 @@ $save = function (): void {
         'privacy_consent' => ['accepted'],
         'valid_id' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         'profile_photo' => ['nullable', 'image', 'max:5120'],
+        'birth_certificate' => [$needsUpload('birth_certificate') ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+        'tor' => [$requiresTor && $needsUpload('tor') ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+        'marriage_contract' => [$requiresMarriageContract && $needsUpload('marriage_contract') ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
     ]);
-
     $classifications = $validated['classifications'] ?? [];
+ 
     if (in_array('Others', $classifications, true)) {
         $classifications = array_values(array_filter($classifications, fn ($item) => $item !== 'Others'));
         $classifications[] = 'Others: '.$validated['classification_other'];
@@ -163,22 +213,112 @@ $save = function (): void {
     $validated['classifications'] = $classifications ?: null;
     $validated['disability_types'] = $disabilityTypes ?: null;
     unset($validated['classification_other'], $validated['disability_other']);
+    $profileData = $validated;
+    unset($profileData['valid_id'], $profileData['profile_photo'], $profileData['birth_certificate'], $profileData['tor'], $profileData['marriage_contract']);
 
-    abort_unless($user->institutions()->whereKey($validated['institution_id'])->exists(), 403);
 
-    DB::transaction(function () use ($validated, $user): void {
+$institutionQuery = Institution::query()
+    ->whereKey($validated['institution_id'])
+    ->where('is_active', true);
+
+if (! $user->hasRole('applicant')) {
+    $institutionQuery->whereHas('users', function ($query) use ($user) {
+        $query->where('users.id', $user->id);
+    });
+}
+
+abort_unless($institutionQuery->exists(), 403);
+$oldDocumentPaths = [];
+$periodDenied = false;
+$submissionBlocked = false;
+DB::transaction(function () use ($validated, $profileData, $user, &$oldDocumentPaths, &$periodDenied, &$submissionBlocked): void {
+        $existingApplication = EnrollmentApplication::query()
+            ->where('learner_user_id', $user->id)
+            ->lockForUpdate()
+            ->first();
+
+        // Re-check under the row lock to protect against a concurrent submit/finalize.
+        // Return a state to Livewire rather than aborting with a full-page 403 response.
+        if ($existingApplication && ! in_array($existingApplication->application_status, ['draft', 'returned_for_revision'], true)) {
+            $submissionBlocked = true;
+            return;
+        }
+
+        $isRevisionOfExistingSubmission = $existingApplication
+            && $existingApplication->application_status === 'returned_for_revision';
+        $hasConfiguredIntakePeriods = IntakePeriod::query()->where(fn ($query) => $query->whereNull('institution_id')->orWhere('institution_id', (int) $validated['institution_id']))->exists();
+        $activeIntake = IntakePeriod::query()
+            ->where(fn ($query) => $query->whereNull('institution_id')->orWhere('institution_id', (int) $validated['institution_id']))
+            ->whereDate('starts_at', '<=', today())
+            ->whereDate('ends_at', '>=', today())
+            ->orderByRaw('CASE WHEN institution_id = ? THEN 0 ELSE 1 END', [(int) $validated['institution_id']])
+            ->orderBy('starts_at')
+            ->lockForUpdate()
+            ->first();
+
+        if ($hasConfiguredIntakePeriods && ! $activeIntake && ! $isRevisionOfExistingSubmission) {
+            $periodDenied = true;
+            return;
+        }
+
+        if ($activeIntake) {
+            $intakeActual = EnrollmentApplication::query()
+                ->whereNull('archived_at')
+                ->whereNotNull('submitted_at')
+                ->where('submitted_at', '>=', $activeIntake->starts_at->copy()->startOfDay())
+                ->where('submitted_at', '<=', $activeIntake->ends_at->copy()->endOfDay())
+                ->when($activeIntake->institution_id, fn ($query) => $query->where('institution_id', $activeIntake->institution_id))
+                ->count();
+            if (($activeIntake->is_locked || $intakeActual >= $activeIntake->quota) && ! $isRevisionOfExistingSubmission) {
+                if (! $activeIntake->is_locked && $intakeActual >= $activeIntake->quota) {
+                    $activeIntake->forceFill([
+                        'is_locked' => true,
+                        'locked_at' => now(),
+                        'locked_by_user_id' => null,
+                    ])->save();
+                    \App\Support\ActivityLogger::record(
+                        'intake_period_auto_locked',
+                        'Automatically locked intake period '.$activeIntake->name.' because its quota was reached.',
+                        null,
+                        ['intake_period_id' => $activeIntake->id, 'quota' => $activeIntake->quota]
+                    );
+                }
+
+                $periodDenied = true;
+                return;
+            }
+        }
+
+        if ($activeIntake && ! $isRevisionOfExistingSubmission) {
+            $courseQuota = IntakeCourseQuota::query()
+                ->where('intake_period_id', $activeIntake->id)
+                ->where('course_id', (int) $validated['course_id'])
+                ->first();
+
+            if ($courseQuota) {
+                $courseActual = EnrollmentApplication::query()
+                    ->whereNull('archived_at')
+                    ->whereNotNull('submitted_at')
+                    ->where('course_id', (int) $validated['course_id'])
+                    ->where('submitted_at', '>=', $activeIntake->starts_at->copy()->startOfDay())
+                    ->where('submitted_at', '<=', $activeIntake->ends_at->copy()->endOfDay())
+                    ->when($activeIntake->institution_id, fn ($query) => $query->where('institution_id', $activeIntake->institution_id))
+                    ->count();
+
+                if ($courseActual >= $courseQuota->quota) {
+                    $periodDenied = true;
+                    return;
+                }
+            }
+        }
+
         $profile = LearnerProfile::updateOrCreate(
             ['user_id' => $user->id],
-            [...$validated, 'submitted_at' => now()],
+            [...$profileData, 'submitted_at' => now()],
         );
 
-        
-$existingApplication = EnrollmentApplication::where(
-    'learner_user_id',
-    $user->id
-)->first();
-
 $referenceNo = $existingApplication?->reference_no;
+$previousApplicationStatus = $existingApplication?->application_status;
 
 if (! $referenceNo) {
     do {
@@ -189,7 +329,6 @@ if (! $referenceNo) {
         EnrollmentApplication::where('reference_no', $referenceNo)->exists()
     );
 }
-
     $application = EnrollmentApplication::updateOrCreate(
         ['learner_user_id' => $user->id],
         [
@@ -205,37 +344,130 @@ if (! $referenceNo) {
             'email' => $user->email,
             'contact_number' => $profile->contact_number,
             'application_status' => 'submitted',
-            'record_completeness' => 70,
+            'verified_at' => null,
+            'confirmed_at' => null,
+            'scholar_id' => null,
+            'record_completeness' => 0,
             'submitted_at' => now(),
         ],
     );
 
+    if ($previousApplicationStatus !== 'submitted') {
+        \App\Support\EnrollmentStatusRecorder::record(
+            $application,
+            $previousApplicationStatus,
+            'submitted',
+            $previousApplicationStatus === 'returned_for_revision'
+                ? 'Learner resubmitted the requested revisions.'
+                : 'Learner submitted the registration form.'
+        );
+    }
 
-        foreach (['valid_id' => 'valid_id', 'profile_photo' => 'profile_photo'] as $property => $type) {
-            if (! $this->{$property}) {
-                continue;
-            }
+        foreach ([
+            'valid_id' => 'valid_id',
+            'profile_photo' => 'profile_photo',
+            'birth_certificate' => 'birth_certificate',
+            'tor' => 'tor',
+            'marriage_contract' => 'marriage_contract',
+        ] as $property => $type) {
+$file = $validated[$property] ?? null;
 
-            $file = $this->{$property};
-            $path = $file->store("learner-documents/{$user->id}", 'local');
+if (! $file) {
+    continue;
+}
 
-            LearnerDocument::create([
-                'user_id' => $user->id,
-                'learner_profile_id' => $profile->id,
-                'document_type' => $type,
-                'original_name' => $file->getClientOriginalName(),
-                'path' => $path,
-                'mime_type' => $file->getMimeType(),
-                'size' => $file->getSize(),
-                'status' => 'pending',
-            ]);
+    
+    $path = $file->store("learner-documents/{$user->id}", 'local');
+
+    if (! $path) {
+        throw new \RuntimeException('Unable to store learner document.');
+    }
+
+    $existingDocuments = LearnerDocument::query()
+        ->where('user_id', $user->id)
+        ->where('document_type', $type)
+        ->orderByDesc('id')
+        ->get();
+
+    $document = $existingDocuments->first();
+
+    foreach ($existingDocuments as $existingDocument) {
+        if ($existingDocument->path !== $path) {
+            $oldDocumentPaths[] = $existingDocument->path;
         }
 
-        $application->update([
-            'record_completeness' => min(100, 70 + $profile->documents()->count() * 15),
+        if ($document && $existingDocument->id !== $document->id) {
+            $existingDocument->delete();
+        }
+    }
+
+    $documentData = [
+        'learner_profile_id' => $profile->id,
+        'document_type' => $type,
+        'original_name' => $file->getClientOriginalName(),
+        'path' => $path,
+        'mime_type' => $file->getMimeType(),
+        'size' => $file->getSize(),
+        'status' => 'pending',
+        'reviewed_by_user_id' => null,
+        'reviewed_at' => null,
+        'remarks' => null,
+    ];
+
+    if ($document) {
+        $document->update($documentData);
+    } else {
+        LearnerDocument::create([
+            'user_id' => $user->id,
+            ...$documentData,
         ]);
+    }
+}
+
+        $assessment = app(\App\Support\EnrollmentVerificationService::class)->assess($application->fresh());
+        $application->update(['record_completeness' => $assessment['percentage']]);
+
+        if ($activeIntake) {
+            $intakeActual = EnrollmentApplication::query()
+                ->whereNull('archived_at')
+                ->whereNotNull('submitted_at')
+                ->where('submitted_at', '>=', $activeIntake->starts_at->copy()->startOfDay())
+                ->where('submitted_at', '<=', $activeIntake->ends_at->copy()->endOfDay())
+                ->when($activeIntake->institution_id, fn ($query) => $query->where('institution_id', $activeIntake->institution_id))
+                ->count();
+            if ($intakeActual >= $activeIntake->quota && ! $activeIntake->is_locked) {
+                $activeIntake->forceFill([
+                    'is_locked' => true,
+                    'locked_at' => now(),
+                    'locked_by_user_id' => null,
+                ])->save();
+                \App\Support\ActivityLogger::record(
+                    'intake_period_auto_locked',
+                    'Automatically locked intake period '.$activeIntake->name.' after the submission reached its quota.',
+                    null,
+                    ['intake_period_id' => $activeIntake->id, 'quota' => $activeIntake->quota]
+                );
+            }
+        }
     });
 
+if ($submissionBlocked) {
+    Flux::toast(
+        variant: 'warning',
+        text: 'This enrollment is already submitted or finalized. Contact the Registrar if a correction is needed.'
+    );
+
+    return;
+}
+
+if ($periodDenied) {
+    Flux::toast(variant: 'danger', text: 'The current intake period is closed, the overall quota is full, or the selected course quota has been reached. Please contact TESDA staff for guidance.');
+    return;
+}
+
+if ($oldDocumentPaths !== []) {
+    Storage::disk('local')->delete(array_values(array_unique($oldDocumentPaths)));
+}
     Flux::toast(variant: 'success', text: 'Your learner registration was submitted for staff review.');
     $this->redirectRoute('learner.portal', navigate: true);
 };
@@ -328,9 +560,19 @@ if (! $referenceNo) {
         </flux:card>
 
         <flux:card class="bg-white p-6 shadow-sm">
-            <div class="mb-6"><flux:heading size="lg">7. Supporting documents</flux:heading><flux:text class="mt-1">You may attach a valid ID and a profile photo now. Files are stored privately and are visible only to you and authorized TESDA staff.</flux:text></div>
-            <div class="grid gap-5 md:grid-cols-2"><flux:input wire:model="valid_id" type="file" label="Valid ID" accept=".jpg,.jpeg,.png,.pdf" /><flux:input wire:model="profile_photo" type="file" label="Profile photo" accept="image/jpeg,image/png" /></div>
-            <p class="mt-3 text-xs text-slate-400">Allowed: JPG, PNG, or PDF · Maximum file size: 5 MB per file.</p>
+            <div class="mb-6"><flux:heading size="lg">7. Supporting documents</flux:heading><flux:text class="mt-1">Birth certificate is mandatory. TOR is required for High School Graduate or College Graduate. Marriage contract is required if married. Valid ID and profile photo are optional. Files are stored privately and are visible only to you and authorized TESDA staff.</flux:text></div>
+            <div class="grid gap-5 md:grid-cols-2">
+                <flux:input wire:model="birth_certificate" type="file" label="Birth certificate (required)" accept=".jpg,.jpeg,.png,.pdf" />
+                @if (in_array($educational_attainment, ['High School Graduate', 'College Graduate'], true))
+                    <flux:input wire:model="tor" type="file" label="Transcript of Records (TOR) (required)" accept=".jpg,.jpeg,.png,.pdf" />
+                @endif
+                @if ($civil_status === 'Married')
+                    <flux:input wire:model="marriage_contract" type="file" label="Marriage contract (required)" accept=".jpg,.jpeg,.png,.pdf" />
+                @endif
+                <flux:input wire:model="valid_id" type="file" label="Valid ID (optional)" accept=".jpg,.jpeg,.png,.pdf" />
+                <flux:input wire:model="profile_photo" type="file" label="Profile photo (optional)" accept="image/jpeg,image/png" />
+            </div>
+            <p class="mt-3 text-xs text-slate-400">Allowed for documents: JPG, PNG, or PDF · Maximum file size: 5 MB per file.</p>
         </flux:card>
 
         <flux:card class="border-emerald-100 bg-emerald-50 p-6 shadow-sm"><flux:heading size="lg">8. Privacy consent and electronic submission</flux:heading><p class="mt-3 text-sm leading-6 text-emerald-900/75">I attest that the information in this learner profile is true and correct. I consent to TESDA processing my personal information for training, scholarship, employment, survey, and other related TESDA programs that may be beneficial to my qualifications.</p><flux:checkbox wire:model="privacy_consent" class="mt-5" label="Agree — I have read the Privacy Notice and consent to electronic submission." required /><div class="mt-6 flex justify-end"><flux:button type="submit" variant="primary" icon="paper-airplane">Submit learner registration</flux:button></div></flux:card>

@@ -1,35 +1,164 @@
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
 
         <style>
-            /* TESDA Connect Sidebar */
             .tesda-sidebar {
+                /* Wider desktop rail, but never wider than the available viewport. */
+                --sidebar-width: 19rem;
+                --sidebar-width-collapsed: 4.25rem;
+                width: min(19rem, calc(100vw - 1rem)) !important;
+                max-width: calc(100vw - 1rem) !important;
+                min-width: 0;
+                box-sizing: border-box;
                 background-color: #102f68 !important;
                 color: #ffffff !important;
+                overflow-x: hidden !important;
             }
 
-            /* Sidebar menu labels and icons */
+            .tesda-sidebar,
+            .tesda-sidebar * {
+                box-sizing: border-box;
+            }
+
+            /* Keep the vertical menu scrollable while eliminating the bottom horizontal bar. */
+            .tesda-sidebar [data-flux-sidebar-nav],
+            .tesda-sidebar [data-flux-sidebar-group] {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                overflow-x: hidden !important;
+            }
+
+            /* Only the main navigation should scroll; expandable groups must not create nested scrollbars. */
+            .tesda-sidebar > [data-flux-sidebar-nav] {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(191, 219, 254, 0.55) transparent;
+                overscroll-behavior: contain;
+            }
+
+            /* Use the same typography for every role (administrator, registrar, focal person, learner). */
+            .tesda-sidebar [data-flux-sidebar-item] {
+                width: 100%;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                white-space: normal !important;
+                font-size: 1rem !important;
+                line-height: 1.35 !important;
+                font-weight: 600;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-item] > span:last-child {
+                font-size: inherit !important;
+            }
+
+            /* Expandable and non-expandable group labels should have identical sizing. */
+            .tesda-sidebar [data-flux-sidebar-group-heading],
+            .tesda-sidebar [data-flux-sidebar-group] button[aria-expanded],
+            .tesda-sidebar [data-flux-sidebar-group] [role="button"][aria-expanded] {
+                font-size: 0.875rem !important;
+                line-height: 1.3 !important;
+                font-weight: 700 !important;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-item] > span:last-child {
+                flex: 1 1 auto;
+                min-width: 0;
+                max-width: 100%;
+                white-space: normal !important;
+                overflow-wrap: anywhere;
+                line-height: 1.35;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-item] > svg,
+            .tesda-sidebar [data-flux-sidebar-item] > span:first-child:has(svg) {
+                flex-shrink: 0;
+            }
+
+            .tesda-sidebar [data-flux-sidebar-group-heading] {
+                max-width: 100%;
+                white-space: normal !important;
+                overflow-wrap: anywhere;
+                line-height: 1.3;
+            }
+
+            .tesda-sidebar .tesda-disabled-nav {
+                width: 100%;
+                min-width: 0;
+                max-width: 100%;
+                flex-wrap: wrap;
+                overflow-wrap: anywhere;
+                font-size: 1rem !important;
+                line-height: 1.35 !important;
+                font-weight: 600;
+            }
+
+            .tesda-sidebar .tesda-disabled-nav > span:first-of-type {
+                flex: 1 1 7rem;
+                min-width: 0;
+                overflow-wrap: anywhere;
+                line-height: 1.35;
+            }
+
+            .tesda-sidebar .tesda-unavailable-label {
+                flex: 0 1 auto;
+                max-width: 100%;
+                white-space: normal !important;
+                overflow-wrap: anywhere;
+                margin-left: auto;
+            }
+
+            @media (max-width: 640px) {
+                .tesda-sidebar {
+                    --sidebar-width: 18rem;
+                    width: min(18rem, calc(100vw - 0.75rem)) !important;
+                    max-width: calc(100vw - 0.75rem) !important;
+                }
+
+                .tesda-sidebar [data-flux-sidebar-nav] {
+                    padding-inline: 0.5rem;
+                }
+
+                /* Do not shrink group labels on mobile; keep typography consistent across roles. */
+                .tesda-sidebar [data-flux-sidebar-group-heading],
+                .tesda-sidebar [data-flux-sidebar-group] button[aria-expanded],
+                .tesda-sidebar [data-flux-sidebar-group] [role="button"][aria-expanded] {
+                    font-size: 0.875rem !important;
+                }
+
+                .tesda-sidebar .tesda-disabled-nav {
+                    gap: 0.5rem;
+                    padding-inline: 0.625rem;
+                }
+
+                .tesda-sidebar .tesda-unavailable-label {
+                    font-size: 0.625rem;
+                }
+            }
+
             .tesda-sidebar [data-flux-sidebar-item],
             .tesda-sidebar [data-flux-sidebar-item] > *,
             .tesda-sidebar [data-flux-sidebar-item] svg {
                 color: #eaf2ff !important;
             }
 
-            /* Sidebar menu hover */
             .tesda-sidebar [data-flux-sidebar-item]:hover {
-                background-color: rgba(255, 255, 255, 0.14) !important;
-                color: #ffffff !important;
+                background-color: #ffffff !important;
+                color: #102f68 !important;
             }
 
             .tesda-sidebar [data-flux-sidebar-item]:hover,
             .tesda-sidebar [data-flux-sidebar-item]:hover *,
             .tesda-sidebar [data-flux-sidebar-item]:hover svg {
-                color: #ffffff !important;
+                color: #102f68 !important;
             }
 
-            /* Active / current menu */
+            .tesda-sidebar [data-flux-sidebar-item]:focus-visible {
+                outline: 2px solid #ffffff !important;
+                outline-offset: 2px;
+            }
+
             .tesda-sidebar [data-flux-sidebar-item][data-current],
             .tesda-sidebar [data-flux-sidebar-item][aria-current="page"] {
                 background-color: #ffffff !important;
@@ -44,18 +173,38 @@
                 color: #102f68 !important;
             }
 
-            /* Menu group heading */
             .tesda-sidebar [data-flux-sidebar-group-heading] {
                 color: #bfdbfe !important;
             }
 
-            /* Sidebar header branding */
+            .tesda-sidebar .tesda-disabled-nav {
+                color: rgba(234, 242, 255, 0.7) !important;
+                cursor: not-allowed;
+            }
+
+            .tesda-sidebar .tesda-disabled-nav svg {
+                color: rgba(191, 219, 254, 0.65) !important;
+            }
+
+            .tesda-sidebar .tesda-unavailable-label {
+                color: #bfdbfe !important;
+                font-size: 9px;
+                line-height: 1.2;
+                letter-spacing: 0.02em;
+                white-space: nowrap;
+            }
+
+            .tesda-sidebar .tesda-nav-subheading {
+                color: #bfdbfe !important;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+            }
+
             .tesda-sidebar a,
             .tesda-sidebar a span {
                 color: inherit;
             }
 
-            /* Keep the brand logo colors */
             .tesda-sidebar .tesda-brand-name {
                 color: #ffffff !important;
             }
@@ -68,7 +217,6 @@
                 color: #bfdbfe !important;
             }
 
-            /* Sidebar user information */
             .tesda-sidebar .tesda-user-name {
                 color: #ffffff !important;
             }
@@ -77,7 +225,6 @@
                 color: #bfdbfe !important;
             }
 
-            /* Sign out button */
             .tesda-sidebar .tesda-logout {
                 color: #ffffff !important;
             }
@@ -121,104 +268,538 @@
                 <flux:sidebar.collapse class="text-white lg:hidden" />
             </flux:sidebar.header>
 
-            <flux:sidebar.nav class="px-3 py-4">
-                <flux:sidebar.group heading="MAIN MENU" class="grid text-blue-200">
-                    <flux:sidebar.item
-                        icon="home"
-                        :href="route('dashboard')"
-                        :current="request()->routeIs('dashboard')"
-                        wire:navigate
-                    >
-                        Dashboard
-                    </flux:sidebar.item>
-
-                    @if ($user->hasRole('administrator', 'registrar'))
+            <flux:sidebar.nav class="min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-3 py-4" style="max-height: calc(100dvh - 13rem);">
+                @if ($user->hasRole('administrator'))
+                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="dashboard" class="grid text-blue-200">
                         <flux:sidebar.item
-                            icon="clipboard-document-list"
-                            :href="route('enrollments.index')"
-                            :current="request()->routeIs('enrollments.*')"
+                            icon="home"
+                            :href="route('dashboard') . '#system-overview'"
+                            :current="request()->routeIs('dashboard')"
                             wire:navigate
                         >
-                            Enrollment Monitoring
+                            System Overview
                         </flux:sidebar.item>
-                    @endif
+                        <flux:sidebar.item
+                            icon="chart-bar"
+                            :href="route('dashboard') . '#bst-mif-comparison'"
+                            :current="false"
+                            wire:navigate
+                        >
+                            BST ↔ MIF Comparison
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="clipboard-document-list"
+                            :href="route('system.activity')"
+                            :current="request()->routeIs('system.activity')"
+                            wire:navigate
+                        >
+                            Activity Logs
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="chart-bar"
+                            :href="route('dashboard') . '#quick-stats'"
+                            :current="false"
+                            wire:navigate
+                        >
+                            Quick Stats
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
 
-                    @if ($user->hasRole('administrator', 'registrar', 'focal_person'))
+                    <flux:sidebar.group heading="ENROLLMENT MONITORING" expandable :expanded="false" data-tesda-sidebar-group="enrollment" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="clipboard-document-list"
+                            :href="route('enrollments.index', ['status' => 'submitted'])"
+                            :current="request()->routeIs('enrollments.index') && request()->query('status') === 'submitted'"
+                            wire:navigate
+                        >
+                            Submissions
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="clipboard-document-list"
+                            :href="route('enrollments.index', ['status' => 'confirmed'])"
+                            :current="request()->routeIs('enrollments.index') && request()->query('status') === 'confirmed'"
+                            wire:navigate
+                        >
+                            Verified Records
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="document-arrow-down"
+                            :href="route('system.forwarded-batches')"
+                            :current="request()->routeIs('system.forwarded-batches')"
+                            wire:navigate
+                        >
+                            Forwarded Batches
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="chart-bar"
+                            :href="route('system.intake-summary')"
+                            :current="request()->routeIs('system.intake-summary')"
+                            wire:navigate
+                        >
+                            Intake Summary
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="SCHEDULING MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="scheduling" class="grid text-blue-200">
                         <flux:sidebar.item
                             icon="calendar-days"
                             :href="route('schedules.index')"
                             :current="request()->routeIs('schedules.*')"
                             wire:navigate
                         >
-                            Scheduling Management
+                            Create / Edit
                         </flux:sidebar.item>
-                    @endif
-
-                    @if ($user->hasRole('administrator', 'focal_person'))
                         <flux:sidebar.item
-                            icon="academic-cap"
-                            :href="route('progress.index')"
-                            :current="request()->routeIs('progress.*')"
+                            icon="calendar-days"
+                            :href="route('system.calendar')"
+                            :current="request()->routeIs('system.calendar')"
                             wire:navigate
                         >
-                            Progress & Achievement
+                            Calendar
                         </flux:sidebar.item>
-                    @endif
-
-                    @if ($user->hasRole('administrator', 'registrar', 'focal_person'))
                         <flux:sidebar.item
-                            icon="chart-bar"
-                            :href="route('reports.index')"
-                            :current="request()->routeIs('reports.*')"
+                            icon="calendar-days"
+                            :href="route('system.duration-compliance')"
+                            :current="request()->routeIs('system.duration-compliance')"
                             wire:navigate
                         >
-                            Reports & Oversight
+                            Duration Compliance
                         </flux:sidebar.item>
-                    @endif
+                        <flux:sidebar.item
+                            icon="calendar-days"
+                            :href="route('system.batches')"
+                            :current="request()->routeIs('system.batches')"
+                            wire:navigate
+                        >
+                            Batch Management
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="book-open"
+                            :href="route('system.courses')"
+                            :current="request()->routeIs('system.courses')"
+                            wire:navigate
+                        >
+                            Course Setup
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="building-office-2"
+                            :href="route('system.institutions')"
+                            :current="request()->routeIs('system.institutions')"
+                            wire:navigate
+                        >
+                            Institution Setup
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="clipboard-document-list"
+                            :href="route('competencies.index')"
+                            :current="request()->routeIs('competencies.*')"
+                            wire:navigate
+                        >
+                            Competency Setup
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="clipboard-document-list"
+                            :href="route('attendance.index')"
+                            :current="request()->routeIs('attendance.*')"
+                            wire:navigate
+                        >
+                            Attendance Management
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
 
-                    @if ($user->hasRole('administrator'))
+                    <flux:sidebar.group heading="SYSTEM MONITORING" expandable :expanded="false" data-tesda-sidebar-group="system-monitoring" class="grid text-blue-200">
                         <flux:sidebar.item
                             icon="users"
                             :href="route('system.accounts')"
                             :current="request()->routeIs('system.accounts')"
                             wire:navigate
                         >
-                            User Accounts
+                            Accounts
                         </flux:sidebar.item>
-
                         <flux:sidebar.item
                             icon="shield-check"
                             :href="route('system.activity')"
                             :current="request()->routeIs('system.activity')"
                             wire:navigate
                         >
-                            System Monitoring
+                            Audit Logs
                         </flux:sidebar.item>
-                    @endif
-
-                    @if ($user->hasRole('scholar'))
                         <flux:sidebar.item
                             icon="clipboard-document-list"
-                            :href="route('learner.registration')"
-                            :current="request()->routeIs('learner.registration')"
+                            :href="route('announcements.index')"
+                            :current="request()->routeIs('announcements.*')"
                             wire:navigate
                         >
-                            Registration Form
+                            Announcement Monitor
                         </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="cog"
+                            :href="route('system.health')"
+                            :current="request()->routeIs('system.health')"
+                            wire:navigate
+                        >
+                            Health
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
 
+                    <flux:sidebar.group heading="REPORTS & OVERSIGHT" expandable :expanded="false" data-tesda-sidebar-group="reports" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="chart-bar"
+                            :href="route('progress.competency')"
+                            :current="request()->routeIs('progress.competency')"
+                            wire:navigate
+                        >
+                            Progress
+                        </flux:sidebar.item>
                         <flux:sidebar.item
                             icon="academic-cap"
-                            :href="route('learner.portal')"
-                            :current="request()->routeIs('learner.portal')"
+                            :href="route('progress.index')"
+                            :current="request()->routeIs('progress.index')"
                             wire:navigate
                         >
-                            My Learning Portal
+                            Scholar Monitoring
                         </flux:sidebar.item>
-                    @endif
-                </flux:sidebar.group>
+                        <flux:sidebar.item
+                            icon="academic-cap"
+                            :href="route('certification.index')"
+                            :current="request()->routeIs('certification.*')"
+                            wire:navigate
+                        >
+                            Completion
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="chart-bar"
+                            :href="route('reports.index')"
+                            :current="request()->routeIs('reports.index')"
+                            wire:navigate
+                        >
+                            Performance
+                        </flux:sidebar.item>
+                        <div class="tesda-nav-subheading px-3 pt-3 pb-1 text-[10px] font-bold">Export</div>
+                        <flux:sidebar.item
+                            icon="document-arrow-down"
+                            :href="route('reports.export', ['type' => 'enrollments'])"
+                            :current="false"
+                        >
+                            Enrollment CSV
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="document-arrow-down"
+                            :href="route('reports.export', ['type' => 'competency-progress'])"
+                            :current="false"
+                        >
+                            Competency CSV
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="document-arrow-down"
+                            :href="route('reports.export', ['type' => 'attendance'])"
+                            :current="false"
+                        >
+                            Attendance CSV
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @elseif ($user->hasRole('registrar'))
+                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="registrar-dashboard" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="home"
+                            :href="route('dashboard')"
+                            :current="request()->routeIs('dashboard')"
+                            wire:navigate
+                        >
+                            Dashboard &amp; Recent Submissions
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="users"
+                            :href="route('registrar.account-requests')"
+                            :current="request()->routeIs('registrar.account-requests')"
+                            wire:navigate
+                        >
+                            Account Requests
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="ENROLLMENT MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="registrar-enrollment" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="clipboard-document-list"
+                            :href="route('enrollments.index')"
+                            :current="request()->routeIs('enrollments.index')"
+                            wire:navigate
+                        >
+                            Review / Verify / Confirm Enrollments
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="calendar-days"
+                            :href="route('registrar.intake')"
+                            :current="request()->routeIs('registrar.intake')"
+                            wire:navigate
+                        >
+                            Intake Acceptance &amp; Quotas
+                        </flux:sidebar.item>
+                        <flux:sidebar.item
+                            icon="document-arrow-down"
+                            :href="route('registrar.forward-batches')"
+                            :current="request()->routeIs('registrar.forward-batches')"
+                            wire:navigate
+                        >
+                            Forward Confirmed Batch to Admin
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="STUDENT RECORDS" expandable :expanded="false" data-tesda-sidebar-group="registrar-student-records" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="users"
+                            :href="route('registrar.student-records')"
+                            :current="request()->routeIs('registrar.student-records')"
+                            wire:navigate
+                        >
+                            Student Records (Search, Update &amp; Archive)
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="ANNOUNCEMENTS" expandable :expanded="false" data-tesda-sidebar-group="registrar-announcements" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="megaphone"
+                            :href="route('announcements.index')"
+                            :current="request()->routeIs('announcements.index')"
+                            wire:navigate
+                        >
+                            Manage Announcements
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="ACCOUNT MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="registrar-account-management" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="users"
+                            :href="route('registrar.accounts')"
+                            :current="request()->routeIs('registrar.accounts')"
+                            wire:navigate
+                        >
+                            Staff Accounts (Passwords, Verification &amp; Status)
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="INSTITUTIONS" expandable :expanded="false" data-tesda-sidebar-group="registrar-institutions" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="building-office-2"
+                            :href="route('registrar.institutions')"
+                            :current="request()->routeIs('registrar.institutions')"
+                            wire:navigate
+                        >
+                            Institution Records &amp; Side-by-Side Summary
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @elseif ($user->hasRole('focal_person'))
+                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="focal-dashboard" class="grid text-blue-200">
+                        <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            Dashboard &amp; Institution Overview
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="COMPETENCY PROGRESS &amp; ACHIEVEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-competency" class="grid text-blue-200">
+                        <flux:sidebar.item icon="chart-bar" :href="route('progress.competency')" :current="request()->routeIs('progress.competency')" wire:navigate>
+                            Progress Charts, Update, Review &amp; Submit Summary
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('competencies.index')" :current="request()->routeIs('competencies.*')" wire:navigate>
+                            Competency Units &amp; Tasks Setup
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="chart-bar" :href="route('progress.index')" :current="request()->routeIs('progress.index')" wire:navigate>
+                            Scholar Completion Overview
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="COURSE MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-courses" class="grid text-blue-200">
+                        <flux:sidebar.item icon="book-open" :href="route('focal.courses')" :current="request()->routeIs('focal.courses')" wire:navigate>
+                            Register, Update &amp; Archive Courses
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="CERTIFICATION MANAGEMENT" expandable :expanded="false" data-tesda-sidebar-group="focal-certification" class="grid text-blue-200">
+                        <flux:sidebar.item icon="academic-cap" :href="route('certification.index')" :current="request()->routeIs('certification.*')" wire:navigate>
+                            Batch Certification &amp; Issue Certificate
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="DOCUMENT &amp; ADMIN TASKS" expandable :expanded="false" data-tesda-sidebar-group="focal-documents" class="grid text-blue-200">
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('attendance.index')" :current="request()->routeIs('attendance.*')" wire:navigate>
+                            Attendance Management
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="folder-open" :href="route('focal.documents')" :current="request()->routeIs('focal.documents')" wire:navigate>
+                            Upload / Download Document Library
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="printer" :href="route('focal.forms')" :current="request()->routeIs('focal.forms*')" wire:navigate>
+                            Generate Forms &amp; Secretarial Log
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="calendar-days" :href="route('schedules.index')" :current="request()->routeIs('schedules.*')" wire:navigate>
+                            Batch Scheduling
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="REPORTS &amp; COMMUNICATION" expandable :expanded="false" data-tesda-sidebar-group="focal-reports" class="grid text-blue-200">
+                        <flux:sidebar.item icon="chart-bar" :href="route('reports.index')" :current="request()->routeIs('reports.index')" wire:navigate>
+                            Reports &amp; Oversight
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="megaphone" :href="route('announcements.index')" :current="request()->routeIs('announcements.index')" wire:navigate>
+                            Announcements
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @elseif ($user->hasRole('applicant', 'scholar'))
+                    <flux:sidebar.group heading="DASHBOARD" expandable :expanded="false" data-tesda-sidebar-group="learner-dashboard" class="grid text-blue-200">
+                        <flux:sidebar.item icon="home" :href="route('learner.portal')" :current="request()->routeIs('learner.portal')" wire:navigate>
+                            Student / Scholar Dashboard
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+
+                    <flux:sidebar.group heading="ENROLLMENT SUBMISSION" expandable :expanded="false" data-tesda-sidebar-group="learner-enrollment" class="grid text-blue-200">
+                        <flux:sidebar.item icon="document-text" :href="route('learner.requirements')" :current="request()->routeIs('learner.requirements')" wire:navigate>
+                            View Requirements
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('learner.registration')" :current="request()->routeIs('learner.registration')" wire:navigate>
+                            Submit Enrollment / Registration Form
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @elseif ($user->hasRole('focal_person'))
+                    <flux:sidebar.group heading="MAIN MENU" class="grid text-blue-200">
+                        <flux:sidebar.item
+                            icon="home"
+                            :href="route('dashboard')"
+                            :current="request()->routeIs('dashboard')"
+                            wire:navigate
+                        >
+                            Dashboard
+                        </flux:sidebar.item>
+                    <flux:sidebar.item
+                        icon="book-open"
+                        :href="route('user-guide')"
+                        :current="request()->routeIs('user-guide')"
+                        wire:navigate
+                    >
+                        User Guide
+                    </flux:sidebar.item>
+
+                        @if ($user->hasRole('registrar'))
+                            <flux:sidebar.item
+                                icon="clipboard-document-list"
+                                :href="route('enrollments.index')"
+                                :current="request()->routeIs('enrollments.*')"
+                                wire:navigate
+                            >
+                                Enrollment Monitoring
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if ($user->hasRole('registrar', 'focal_person'))
+                            <flux:sidebar.item
+                                icon="calendar-days"
+                                :href="route('schedules.index')"
+                                :current="request()->routeIs('schedules.*')"
+                                wire:navigate
+                            >
+                                Scheduling Management
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if ($user->hasRole('focal_person'))
+                            <flux:sidebar.item
+                                icon="academic-cap"
+                                :href="route('progress.index')"
+                                :current="request()->routeIs('progress.*')"
+                                wire:navigate
+                            >
+                                Progress & Achievement
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="clipboard-document-list"
+                                :href="route('attendance.index')"
+                                :current="request()->routeIs('attendance.*')"
+                                wire:navigate
+                            >
+                                Attendance Management
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="chart-bar"
+                                :href="route('progress.competency')"
+                                :current="request()->routeIs('progress.competency')"
+                                wire:navigate
+                            >
+                                Competency Progress
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="clipboard-document-list"
+                                :href="route('competencies.index')"
+                                :current="request()->routeIs('competencies.*')"
+                                wire:navigate
+                            >
+                                Competency Setup
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="academic-cap"
+                                :href="route('certification.index')"
+                                :current="request()->routeIs('certification.*')"
+                                wire:navigate
+                            >
+                                Certification Management
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if ($user->hasRole('registrar', 'focal_person'))
+                            <flux:sidebar.item
+                                icon="chart-bar"
+                                :href="route('reports.index')"
+                                :current="request()->routeIs('reports.*')"
+                                wire:navigate
+                            >
+                                Reports & Oversight
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="clipboard-document-list"
+                                :href="route('announcements.index')"
+                                :current="request()->routeIs('announcements.*')"
+                                wire:navigate
+                            >
+                                Announcements
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if ($user->hasRole('applicant', 'scholar'))
+                            <flux:sidebar.item
+                                icon="clipboard-document-list"
+                                :href="route('learner.registration')"
+                                :current="request()->routeIs('learner.registration')"
+                                wire:navigate
+                            >
+                                Registration Form
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="academic-cap"
+                                :href="route('learner.portal')"
+                                :current="request()->routeIs('learner.portal')"
+                                wire:navigate
+                            >
+                                My Learning Portal
+                            </flux:sidebar.item>
+                        @endif
+                    </flux:sidebar.group>
+                @endif
             </flux:sidebar.nav>
 
             <flux:spacer />
+            <div data-user-guide-sidebar class="px-3 pb-3">
+                <flux:sidebar.item
+                    icon="book-open"
+                    :href="route('user-guide')"
+                    :current="request()->routeIs('user-guide')"
+                    wire:navigate
+                >
+                    User Guide &amp; Role Handbook
+                </flux:sidebar.item>
+            </div>
+
 
             <div class="border-t border-white/10 p-4">
                 <div class="flex items-center gap-3 rounded-xl bg-white/10 p-3">
@@ -302,6 +883,117 @@
             </flux:toast.group>
         @endpersist
 
+
+        <script>
+            (() => {
+                const storageKey = @js('tesda-connect-v2:sidebar-groups:' . (string) $user->getAuthIdentifier());
+                const rootSelector = '.tesda-sidebar';
+                const globalKey = '__tesdaConnectSidebarGroupPersistenceV2';
+
+                // The layout may be visited again through Livewire wire:navigate.
+                // Keep one delegated listener while restoring the saved state on each navigation.
+                if (window[globalKey]) {
+                    window[globalKey].restore();
+                    return;
+                }
+
+                let restoring = false;
+
+                const readState = () => {
+                    try {
+                        const value = JSON.parse(window.localStorage.getItem(storageKey) || '{}');
+                        if (!value || typeof value !== 'object') return { openGroup: null };
+
+                        // Backward-compatible migration from the previous { groupId: true/false } format.
+                        if (typeof value.openGroup === 'string' || value.openGroup === null) {
+                            return { openGroup: value.openGroup || null };
+                        }
+
+                        const legacyOpenGroup = Object.keys(value).find((key) => value[key] === true);
+                        return { openGroup: legacyOpenGroup || null };
+                    } catch (error) {
+                        return { openGroup: null };
+                    }
+                };
+
+                const writeState = (openGroup) => {
+                    try {
+                        window.localStorage.setItem(storageKey, JSON.stringify({ openGroup: openGroup || null }));
+                    } catch (error) {
+                        // If storage is disabled, the sidebar still works for the current page.
+                    }
+                };
+
+                const groups = () => Array.from(document.querySelectorAll(`${rootSelector} [data-tesda-sidebar-group]`));
+                const findTrigger = (group) => group.querySelector('button[aria-expanded], [role="button"][aria-expanded]');
+
+                const setExpanded = (group, shouldExpand) => {
+                    const trigger = findTrigger(group);
+                    if (!trigger) return;
+
+                    const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+                    if (shouldExpand !== isExpanded) {
+                        restoring = true;
+                        trigger.click();
+                        restoring = false;
+                    }
+                };
+
+                const restore = () => {
+                    window.requestAnimationFrame(() => {
+                        const state = readState();
+                        const availableGroups = groups();
+                        const savedOpenGroup = availableGroups.some((group) => group.getAttribute('data-tesda-sidebar-group') === state.openGroup)
+                            ? state.openGroup
+                            : null;
+
+                        // Accordion behavior: restore exactly one open section; every other section stays closed.
+                        availableGroups.forEach((group) => {
+                            const id = group.getAttribute('data-tesda-sidebar-group');
+                            setExpanded(group, id === savedOpenGroup);
+                        });
+
+                        // Normalize older saved state to the exclusive single-open format.
+                        if (savedOpenGroup !== state.openGroup) writeState(savedOpenGroup);
+                    });
+                };
+
+                document.addEventListener('click', (event) => {
+                    if (!(event.target instanceof Element)) return;
+
+                    const trigger = event.target.closest(
+                        `${rootSelector} [data-tesda-sidebar-group] button[aria-expanded], ` +
+                        `${rootSelector} [data-tesda-sidebar-group] [role="button"][aria-expanded]`
+                    );
+
+                    if (!trigger || restoring) return;
+
+                    const group = trigger.closest('[data-tesda-sidebar-group]');
+                    const id = group?.getAttribute('data-tesda-sidebar-group');
+                    if (!id) return;
+
+                    // Wait until Flux toggles the clicked group, then close every other section.
+                    window.setTimeout(() => {
+                        const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+                        if (isExpanded) {
+                            groups().forEach((otherGroup) => {
+                                if (otherGroup !== group) setExpanded(otherGroup, false);
+                            });
+                            writeState(id);
+                        } else {
+                            writeState(null);
+                        }
+                    }, 0);
+                });
+
+                window[globalKey] = { restore };
+                document.addEventListener('livewire:navigated', restore);
+                document.addEventListener('DOMContentLoaded', restore, { once: true });
+                if (document.readyState !== 'loading') restore();
+            })();
+        </script>
+
+        @include('layouts.app.partials.scroll-controls')
         @fluxScripts
     </body>
 </html>

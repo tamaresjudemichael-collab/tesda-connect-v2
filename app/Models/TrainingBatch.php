@@ -9,12 +9,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class TrainingBatch extends Model
 {
     protected $fillable = [
-        'institution_id', 'course_id', 'code', 'name', 'capacity', 'starts_at', 'ends_at', 'status',
+        'institution_id', 'course_id', 'code', 'name', 'capacity', 'starts_at', 'ends_at', 'next_class_at', 'venue', 'status',
     ];
 
     protected function casts(): array
     {
-        return ['starts_at' => 'date', 'ends_at' => 'date'];
+        return ['starts_at' => 'date', 'ends_at' => 'date', 'next_class_at' => 'datetime'];
     }
 
     public function institution(): BelongsTo

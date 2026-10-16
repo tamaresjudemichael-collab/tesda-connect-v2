@@ -26,6 +26,9 @@ class UserFactory extends Factory
     {
         return [
             'name' => fake()->name(),
+            // Keep factory-created authenticated users consistent with the schema defaults.
+            'role' => 'scholar',
+            'account_status' => 'active',
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),

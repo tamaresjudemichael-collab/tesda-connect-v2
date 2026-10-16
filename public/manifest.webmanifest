@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "TESDA Connect - Training Operations",
+  "short_name": "TESDA Connect",
+  "description": "Offline-capable TESDA training operations workflow support for BST and MIF.",
+  "start_url": "./dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

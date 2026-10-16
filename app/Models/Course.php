@@ -10,6 +10,7 @@ class Course extends Model
 {
     protected $fillable = [
         'institution_id', 'code', 'name', 'qualification_level', 'training_hours', 'is_active',
+        'description', 'requirements', 'curriculum_reference',
     ];
 
     protected function casts(): array
@@ -26,4 +27,9 @@ class Course extends Model
     {
         return $this->hasMany(TrainingBatch::class);
     }
+
+    public function competencyUnits(): HasMany
+{
+    return $this->hasMany(CompetencyUnit::class)->orderBy('sort_order');
+}
 }

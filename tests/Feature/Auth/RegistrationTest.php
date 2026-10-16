@@ -1,5 +1,7 @@
+
 <?php
 
+use App\Models\User;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -12,7 +14,7 @@ test('registration screen can be rendered', function () {
     $response->assertOk();
 });
 
-test('new users can register', function () {
+test('new users can register as active applicants without email verification', function () {
     $response = $this->post(route('register.store'), [
         'name' => 'John Doe',
         'email' => 'test@example.com',
@@ -24,4 +26,10 @@ test('new users can register', function () {
         ->assertRedirect(route('dashboard', absolute: false));
 
     $this->assertAuthenticated();
+
+    $user = User::where('email', 'test@example.com')->firstOrFail();
+
+    expect($user->role)->toBe('applicant')
+        ->and($user->account_status)->toBe('active')
+        ->and($user->email_verified_at)->toBeNull();
 });

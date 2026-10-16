@@ -79,9 +79,12 @@ new #[Title('Security settings')] class extends Component {
             throw $e;
         }
 
-        Auth::user()->update([
+        $user = Auth::user();
+        $user->forceFill([
             'password' => $validated['password'],
-        ]);
+            'force_password_change' => false,
+            'password_expires_at' => $user->password_expiry_exempt ? null : now()->addDays(90),
+        ])->save();
 
         $this->reset('current_password', 'password', 'password_confirmation');
 

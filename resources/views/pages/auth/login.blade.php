@@ -80,6 +80,19 @@ class="[--flux-checkbox-label-color:#ffffff] [&_.\[\:where\(\&\)\]\:text-zinc-80
                 Sign in →
             </flux:button>
         </form>
+        
+        @if (Route::has('register'))
+            <p class="mt-5 text-center text-sm !text-white/80">
+                Don't have an account?
+                <flux:link
+                    :href="route('register')"
+                    wire:navigate
+                    class="font-bold !text-teal-300 hover:!text-teal-200"
+                >
+                    Register here
+                </flux:link>
+            </p>
+        @endif
 
         <p class="mt-7 text-center text-xs leading-5 !text-white/80">
             Your approved role and institution access are applied automatically after sign-in.

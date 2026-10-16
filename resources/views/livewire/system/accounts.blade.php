@@ -2,7 +2,9 @@
 <?php
 
 use App\Models\Institution;
+use App\Models\EnrollmentApplication;
 use App\Models\User;
+use App\Support\ActivityLogger;
 use Flux\Flux;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -20,7 +22,7 @@ state([
     'password' => '',
     'role' => 'scholar',
     'account_status' => 'active',
-    'institutionId' => null,
+    'institutionIds' => [],
 ]);
 
 $accounts = computed(fn () => User::query()->with('institutions')->orderBy('role')->orderBy('name')->get());
@@ -36,12 +38,12 @@ $resetForm = function (): void {
         'password',
         'role',
         'account_status',
-        'institutionId'
+        'institutionIds'
     );
 
     $this->role = 'scholar';
     $this->account_status = 'active';
-    $this->institutionId = null;
+    $this->institutionIds = [];
 
     $this->resetValidation();
 };
@@ -52,11 +54,14 @@ $openCreate = function (): void {
 };
 
 $toggleInstitution = function (int $id): void {
-    $this->institutionId = (int) $this->institutionId === $id
-        ? null
-        : $id;
+    $selected = collect($this->institutionIds)
+        ->map(fn ($value) => (int) $value);
 
-    $this->resetValidation('institutionId');
+    $this->institutionIds = $selected->contains($id)
+        ? $selected->reject(fn ($value) => $value === $id)->values()->all()
+        : $selected->push($id)->unique()->values()->all();
+
+    $this->resetValidation('institutionIds');
 };
 
 $edit = function (int $id): void {
@@ -77,9 +82,12 @@ $edit = function (int $id): void {
     $this->password = '';
     $this->role = $account->role;
     $this->account_status = $account->account_status;
-    $this->institutionId = $account->institutions
-        ->firstWhere('pivot.is_primary', true)?->id
-        ?? $account->institutions->first()?->id;
+    $this->institutionIds = $account->institutions
+    ->sortByDesc(fn ($institution) => (bool) $institution->pivot->is_primary)
+    ->pluck('id')
+    ->map(fn ($id) => (int) $id)
+    ->values()
+    ->all();
 
     $this->formOpen = true;
 };
@@ -110,21 +118,26 @@ $save = function (): void {
         ],
         'account_status' => [
             'required',
-            Rule::in(['active', 'inactive']),
+            Rule::in(['pending', 'active', 'inactive']),
         ],
-        'institutionId' => [
+        'institutionIds' => ['required', 'array', 'min:1'],
+        'institutionIds.*' => [
             'required',
             'integer',
+            'distinct',
             Rule::exists('institutions', 'id')->where('is_active', true),
         ],
     ]);
 
-    $attributes = collect($validated)
-        ->except(['password', 'institutionId'])
-        ->all();
+$attributes = collect($validated)
+    ->except(['password', 'institutionIds'])
+    ->all();
+
+    $before = [];
+    $beforeInstitutionIds = [];
 
     if ($isEditing) {
-        $account = User::findOrFail($this->editingId);
+        $account = User::with('institutions')->findOrFail($this->editingId);
 
         abort_if(
             $account->id === auth()->id(),
@@ -132,8 +145,18 @@ $save = function (): void {
             'Use Profile Settings to update your own account.'
         );
 
+        $before = ActivityLogger::snapshot($account, ['name', 'username', 'email', 'role', 'account_status']);
+        $beforeInstitutionIds = $account->institutions->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+
         if (filled($validated['password'])) {
             $attributes['password'] = Hash::make($validated['password']);
+            $attributes['force_password_change'] = true;
+            $attributes['password_expires_at'] = null;
+        }
+        if ($validated['account_status'] === 'pending') {
+            $attributes['email_verified_at'] = null;
+        } elseif ($validated['account_status'] === 'active' && ! $account->email_verified_at) {
+            $attributes['email_verified_at'] = now();
         }
 
         $account->update($attributes);
@@ -141,13 +164,40 @@ $save = function (): void {
         $account = User::create([
             ...$attributes,
             'password' => Hash::make($validated['password']),
-            'email_verified_at' => now(),
+            'email_verified_at' => $validated['account_status'] === 'pending' ? null : now(),
+            'password_expires_at' => now()->addDays(90),
         ]);
     }
 
-    $account->institutions()->sync([
-        (int) $validated['institutionId'] => ['is_primary' => true],
-    ]);
+$primaryInstitutionId = (int) $validated['institutionIds'][0];
+
+$institutionAssignments = collect($validated['institutionIds'])
+    ->map(fn ($id) => (int) $id)
+    ->unique()
+    ->mapWithKeys(fn ($id) => [
+        $id => ['is_primary' => $id === $primaryInstitutionId],
+    ])
+    ->all();
+
+$account->institutions()->sync($institutionAssignments);
+
+$changes = $isEditing ? ActivityLogger::changes($account, $before) : [];
+$afterInstitutionIds = collect($validated['institutionIds'])->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+if ($isEditing && $beforeInstitutionIds !== $afterInstitutionIds) {
+    $changes['institution_ids'] = ['from' => $beforeInstitutionIds, 'to' => $afterInstitutionIds];
+}
+
+ActivityLogger::record(
+    $isEditing ? 'user_account_updated' : 'user_account_created',
+    ($isEditing ? 'Updated' : 'Created').' user account '.$account->name,
+    (int) $primaryInstitutionId,
+    [
+        'account_id' => $account->id,
+        'account_role' => $account->role,
+        'institution_ids' => array_map('intval', $validated['institutionIds']),
+        'changes' => $changes,
+    ]
+);
 
     unset($this->accounts);
 
@@ -160,8 +210,8 @@ $save = function (): void {
     );
 };
 
-$delete = function (int $id): void {
-    $account = User::findOrFail($id);
+ $delete = function (int $id): void {
+    $account = User::with('institutions')->findOrFail($id);
 
     abort_if(
         $account->id === auth()->id(),
@@ -169,7 +219,46 @@ $delete = function (int $id): void {
         'You cannot delete your own account.'
     );
 
+    $primaryInstitutionId = $account->institutions
+        ->firstWhere('pivot.is_primary', true)?->id
+        ?? $account->institutions->first()?->id;
+
+    $institutionIds = $account->institutions
+        ->pluck('id')
+        ->map(fn ($id) => (int) $id)
+        ->all();
+
+    $hasLearnerRecords = EnrollmentApplication::query()
+        ->where('learner_user_id', $account->id)
+        ->exists()
+        || $account->learnerProfile()->exists()
+        || $account->learnerDocuments()->exists();
+
+    if ($hasLearnerRecords) {
+        Flux::toast(
+            variant: 'warning',
+            text: 'This account has learner records and cannot be permanently deleted. Deactivate the account instead.'
+        );
+
+        return;
+    }
+
+    $accountName = $account->name;
+    $accountRole = $account->role;
+    $accountId = $account->id;
+
     $account->delete();
+
+    ActivityLogger::record(
+        'user_account_deleted',
+        'Deleted user account '.$accountName,
+        $primaryInstitutionId ? (int) $primaryInstitutionId : null,
+        [
+            'account_id' => $accountId,
+            'account_role' => $accountRole,
+            'institution_ids' => $institutionIds,
+        ]
+    );
 
     unset($this->accounts);
 
@@ -178,6 +267,7 @@ $delete = function (int $id): void {
         text: 'User account deleted.'
     );
 };
+ 
 ?>
 
 <div class="mx-auto max-w-7xl space-y-6">
@@ -242,6 +332,7 @@ $delete = function (int $id): void {
                     </flux:select>
 
                     <flux:select wire:model="account_status" label="Account status" required>
+                        <flux:select.option value="pending">Pending approval</flux:select.option>
                         <flux:select.option value="active">Active</flux:select.option>
                         <flux:select.option value="inactive">Inactive</flux:select.option>
                     </flux:select>
@@ -254,29 +345,32 @@ $delete = function (int $id): void {
 
                     <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($this->institutions as $institution)
-                            <label
-                                wire:key="institution-{{ $institution->id }}"
-                                class="flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition
-                                    {{ (string) $institutionId === (string) $institution->id
-                                        ? 'border-cyan-500 bg-cyan-50 ring-1 ring-cyan-500'
-                                        : 'border-slate-200 bg-white hover:border-cyan-300 hover:bg-slate-50' }}"
-                            >
-                                <input
-                                    type="checkbox"
-                                    value="{{ $institution->id }}"
-                                    @checked((string) $institutionId === (string) $institution->id)
-                                    wire:click="toggleInstitution({{ $institution->id }})"
-                                    class="size-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
-                                >
+                           <label
+    wire:key="institution-{{ $institution->id }}"
+    class="flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition
+        {{ in_array((int) $institution->id, array_map('intval', $institutionIds), true)
+            ? 'border-cyan-500 bg-cyan-50 ring-1 ring-cyan-500'
+            : 'border-slate-200 bg-white hover:border-cyan-300 hover:bg-slate-50' }}"
+>
+    <input
+        type="checkbox"
+        value="{{ $institution->id }}"
+        @checked(in_array((int) $institution->id, array_map('intval', $institutionIds), true))
+        wire:click="toggleInstitution({{ $institution->id }})"
+        class="size-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+    >
 
-                                <span class="text-sm font-medium text-slate-700">
-                                    {{ $institution->name }}
-                                </span>
-                            </label>
+    <span class="text-sm font-medium text-slate-700">
+        {{ $institution->name }}
+        <span class="ml-1 text-xs text-slate-500">
+            ({{ $institution->code }})
+        </span>
+    </span>
+</label>
                         @endforeach
                     </div>
 
-                    @error('institutionId')
+                    @error('institutionIds')
                         <p class="mt-2 text-sm text-rose-600">{{ $message }}</p>
                     @enderror
                 </div>

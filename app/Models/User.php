@@ -30,7 +30,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'username', 'email', 'password', 'role', 'account_status', 'last_login_at'])]
+#[Fillable(['name', 'username', 'email', 'password', 'role', 'account_status', 'last_login_at', 'password_expiry_exempt', 'password_expires_at', 'force_password_change'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -47,6 +47,9 @@ class User extends Authenticatable implements PasskeyUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'password_expiry_exempt' => 'boolean',
+            'password_expires_at' => 'datetime',
+            'force_password_change' => 'boolean',
         ];
     }
 
@@ -86,13 +89,17 @@ class User extends Authenticatable implements PasskeyUser
         return in_array($this->role, $roles, true);
     }
 
+   
     public function roleLabel(): string
     {
         return match ($this->role) {
             'administrator' => 'System Administrator',
             'registrar' => 'Registrar',
             'focal_person' => 'UTPRAS / Focal Person',
-            default => 'Scholar / Student',
+            'applicant' => 'Enrollment Applicant',
+            'scholar' => 'Scholar / Student',
+            default => 'Unknown Role',
         };
     }
+
 }
