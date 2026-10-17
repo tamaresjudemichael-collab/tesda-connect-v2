@@ -1,4 +1,3 @@
-@'
 {
   "$schema": "https://schema.railpack.com",
   "steps": {
@@ -10,4 +9,3 @@
     }
   }
 }
-'@ | Set-Content -Encoding utf8 railpack.json
