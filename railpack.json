@@ -1,0 +1,23 @@
+
+{
+  "$schema": "https://schema.railpack.com",
+  "secrets": [
+    "FLUX_USERNAME",
+    "FLUX_LICENSE_KEY"
+  ],
+  "steps": {
+    "install": {
+      "secrets": [
+        "FLUX_USERNAME",
+        "FLUX_LICENSE_KEY"
+      ],
+      "commands": [
+        {
+          "cmd": "composer config --global http-basic.composer.fluxui.dev \"$FLUX_USERNAME\" \"$FLUX_LICENSE_KEY\"",
+          "customName": "Authenticate Flux Pro"
+        },
+        "..."
+      ]
+    }
+  }
+}
