@@ -11,8 +11,7 @@ class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
-        // Core institution records only; no courses, batches, applications,
-        // announcements, activity logs, or competency demo data are created.
+         
         $bst = Institution::updateOrCreate(
             ['code' => 'BST'],
             [
@@ -35,8 +34,7 @@ class DemoDataSeeder extends Seeder
             ],
         );
 
-        // Four demo accounts for each application role (20 accounts total).
-        // Accounts 1-2 for institution-scoped roles belong to BST; 3-4 belong to MIF.
+         
         $roleAccounts = [
             'administrator' => [
                 ['name' => 'System Administrator', 'username' => 'admin', 'email' => 'admin@tesdaconnect.test', 'password' => 'admin123'],
