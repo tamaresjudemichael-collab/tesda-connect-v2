@@ -103,7 +103,7 @@
             }
         }
     },
-    "config": {
+        "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
@@ -114,15 +114,12 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "repositories": {
-        "flux-pro": {
-            "type": "composer",
-            "url": "https://composer.fluxui.dev"
-        },
-        "0": {
-            "name": "flux-pro",
+    "repositories": [
+        {
             "type": "composer",
             "url": "https://composer.fluxui.dev"
         }
-    }
+    ]
 }
+     
+
