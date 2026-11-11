@@ -1,6 +1,6 @@
-
 <?php
 
+use App\Models\Institution;
 use App\Models\User;
 use Laravel\Fortify\Features;
 
@@ -14,8 +14,15 @@ test('registration screen can be rendered', function () {
     $response->assertOk();
 });
 
-test('new users can register as active applicants without email verification', function () {
+test('new users can register as active applicants and are linked to their selected institution', function () {
+    $institution = Institution::create([
+        'code' => 'TEST',
+        'name' => 'Test Institution',
+        'is_active' => true,
+    ]);
+
     $response = $this->post(route('register.store'), [
+        'institution_id' => $institution->id,
         'name' => 'John Doe',
         'email' => 'test@example.com',
         'password' => 'password',
@@ -31,5 +38,30 @@ test('new users can register as active applicants without email verification', f
 
     expect($user->role)->toBe('applicant')
         ->and($user->account_status)->toBe('active')
-        ->and($user->email_verified_at)->toBeNull();
+        ->and($user->email_verified_at)->toBeNull()
+        ->and($user->institutions()->whereKey($institution->id)->exists())->toBeTrue()
+        ->and((bool) $user->institutions()->first()->pivot->is_primary)->toBeTrue();
+});
+
+test('registration rejects inactive institutions', function () {
+    $institution = Institution::create([
+        'code' => 'INACT',
+        'name' => 'Inactive Institution',
+        'is_active' => false,
+    ]);
+
+    $response = $this->from(route('register'))->post(route('register.store'), [
+        'institution_id' => $institution->id,
+        'name' => 'Jane Doe',
+        'email' => 'jane@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ]);
+
+    $response->assertRedirect(route('register'))
+        ->assertSessionHasErrors('institution_id');
+
+    $this->assertDatabaseMissing('users', [
+        'email' => 'jane@example.com',
+    ]);
 });

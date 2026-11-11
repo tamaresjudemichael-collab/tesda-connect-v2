@@ -45,12 +45,8 @@ class DemoDataSeeder extends Seeder
             'focal_person' => [
                 ['name' => 'Marvin Cruz', 'username' => 'focal', 'email' => 'focal@tesdaconnect.test', 'password' => 'focal123'],
                           ],
-            'applicant' => [
-                ['name' => 'Maria Santos', 'username' => 'applicant', 'email' => 'applicant@tesdaconnect.test', 'password' => 'applicant123'],
-                            ],
-            'scholar' => [
-                ['name' => 'Juan Dela Cruz', 'username' => 'scholar', 'email' => 'scholar@tesdaconnect.test', 'password' => 'scholar123'],
-                        ],
+ 
+   
         ];
 
         foreach ($roleAccounts as $role => $accounts) {

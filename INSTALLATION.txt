@@ -1,0 +1,35 @@
+TESDAConnect - Student Enrollment Submissions modal redesign
+
+Replace this file in your Laravel project:
+resources/views/livewire/enrollments/index.blade.php
+
+Back up your existing file first. Extract this ZIP at the Laravel project root
+and allow it to overwrite the matching file.
+
+Then run:
+php artisan optimize:clear
+php artisan view:cache
+php artisan test
+
+No database migration is included.
+
+Included UX changes:
+- Searchable enrollment table with status filters and summary cards.
+- View Application opens a modal.
+- Create / Edit enrollment form opens in a modal.
+- A per-learner Documents button opens the Learner Document Review modal.
+- Document Review History appears inside the learner review modal.
+- Document approval opens a confirmation modal.
+- Document rejection opens a remarks modal.
+- Enrollment approval, return-for-revision, and delete actions use confirmation modals.
+- Existing role checks, institution scoping, validation, verification service,
+  status recorder, activity logging, and scholar confirmation workflow are retained.
+
+Important:
+- Administrator access remains read-only; registrar-only actions remain restricted.
+- User role checking uses the existing variadic hasRole('administrator', 'registrar') API.
+- Document review history shows the review fields currently stored on learner_documents.
+  It is not a full append-only audit trail of every review event.
+- This update was prepared from the previously uploaded project snapshot. If you
+  changed this file locally since that upload, compare/merge before overwriting.
+- Test with both Administrator and Registrar accounts and verify document downloads.

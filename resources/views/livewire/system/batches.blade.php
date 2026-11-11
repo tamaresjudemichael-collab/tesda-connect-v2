@@ -241,8 +241,8 @@ if ($wasEditing && $previousStatus !== $batch->status) {
         </flux:card>
     </div>
 
-    @if ($formOpen)
-        <flux:card class="bg-white p-5 shadow-sm sm:p-6">
+    <flux:modal name="batch-form" wire:model="formOpen" class="max-w-4xl">
+        <div class="space-y-5">
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <flux:heading size="lg">
@@ -253,12 +253,7 @@ if ($wasEditing && $previousStatus !== $batch->status) {
                     </flux:text>
                 </div>
 
-                <flux:button
-                    variant="ghost"
-                    icon="x-mark"
-                    wire:click="$set('formOpen', false)"
-                    aria-label="Close form"
-                />
+                 
             </div>
 
             <form wire:submit="save" class="mt-6 space-y-5">
@@ -368,8 +363,8 @@ if ($wasEditing && $previousStatus !== $batch->status) {
                     </flux:button>
                 </div>
             </form>
-        </flux:card>
-    @endif
+        </div>
+    </flux:modal>
 
     <flux:card class="bg-white p-5 shadow-sm sm:p-6">
         <div class="mb-5">

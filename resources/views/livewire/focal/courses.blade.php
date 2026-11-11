@@ -15,7 +15,8 @@ title('Focal Person Course Management');
 state([
     'formOpen' => false, 'editingId' => null, 'institutionId' => '', 'code' => '', 'name' => '',
     'qualificationLevel' => '', 'trainingHours' => '', 'description' => '', 'requirements' => '',
-    'curriculumReference' => '', 'isActive' => '1', 'search' => '', 'statusFilter' => 'active', 'historyCourseId' => null,
+    'curriculumReference' => '', 'isActive' => '1', 'search' => '', 'statusFilter' => 'active', 'historyCourseId' => null, 'statusConfirmOpen' => false, 'statusCourseId' => null,
+    'statusCourseName' => '', 'statusCourseActive' => true,
 ]);
 
 mount(function (): void {
@@ -113,16 +114,47 @@ $save = function (): void {
     Flux::toast(variant: 'success', text: $editing ? 'Course details saved.' : 'Course registered.');
 };
 
-$toggleStatus = function (int $id): void {
+$openStatusConfirm = function (int $id): void {
     $user = auth()->user();
     abort_unless($user && $user->account_status === 'active' && $user->hasRole('focal_person'), 403);
-    $course = Course::query()->whereIn('institution_id', InstitutionScope::idsFor($user))->findOrFail($id);
+
+    $course = Course::query()
+        ->whereIn('institution_id', InstitutionScope::idsFor($user))
+        ->findOrFail($id);
+
+    $this->statusCourseId = $course->id;
+    $this->statusCourseName = $course->name;
+    $this->statusCourseActive = (bool) $course->is_active;
+    $this->statusConfirmOpen = true;
+};
+
+$confirmStatusChange = function (): void {
+    $user = auth()->user();
+    abort_unless($user && $user->account_status === 'active' && $user->hasRole('focal_person'), 403);
+    abort_unless($this->statusCourseId, 404);
+
+    $course = Course::query()
+        ->whereIn('institution_id', InstitutionScope::idsFor($user))
+        ->findOrFail((int) $this->statusCourseId);
+
     $before = ActivityLogger::snapshot($course, ['is_active']);
     $course->update(['is_active' => ! $course->is_active]);
-    ActivityLogger::record($course->is_active ? 'course_activated' : 'course_archived', ($course->is_active ? 'Reactivated' : 'Archived').' course '.$course->name, (int) $course->institution_id, ['course_id' => $course->id, 'changes' => ActivityLogger::changes($course, $before)]);
+    ActivityLogger::record(
+        $course->is_active ? 'course_activated' : 'course_archived',
+        ($course->is_active ? 'Reactivated' : 'Archived').' course '.$course->name,
+        (int) $course->institution_id,
+        ['course_id' => $course->id, 'changes' => ActivityLogger::changes($course, $before)]
+    );
+
     unset($this->courses);
+    $this->statusConfirmOpen = false;
+    $this->statusCourseId = null;
+    $this->statusCourseName = '';
+
     Flux::toast(variant: 'success', text: $course->is_active ? 'Course reactivated.' : 'Course archived.');
 };
+
+
 ?>
 
 <div class="mx-auto max-w-7xl space-y-6">
@@ -135,27 +167,65 @@ $toggleStatus = function (int $id): void {
         <flux:card class="bg-white p-5"><flux:text>Active Courses</flux:text><flux:heading size="xl">{{ $this->courses->where('is_active', true)->count() }}</flux:heading></flux:card>
         <flux:card class="bg-white p-5"><flux:text>Assigned Institutions</flux:text><flux:heading size="xl">{{ $this->institutions->count() }}</flux:heading></flux:card>
     </div>
-    @if ($formOpen)
-        <flux:card class="bg-white p-5 shadow-sm sm:p-6">
-            <div class="flex items-center justify-between gap-3"><flux:heading size="lg">{{ $editingId ? 'Update course details' : 'Register new course' }}</flux:heading><flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" aria-label="Close" /></div>
-            <form wire:submit="save" class="mt-5 grid gap-4 md:grid-cols-2">
-                <div><label class="mb-1 block text-sm font-medium text-slate-700">Assigned institution</label><select wire:model="institutionId" required class="w-full rounded-lg border-slate-300 text-sm"><option value="">Select institution</option>@foreach($this->institutions as $institution)<option value="{{ $institution->id }}">{{ $institution->code }} — {{ $institution->name }}</option>@endforeach</select>@error('institutionId')<p class="mt-1 text-sm text-rose-600">{{ $message }}</p>@enderror</div>
+    <flux:modal name="focal-course-form-modal" wire:model="formOpen" class="w-full max-w-2xl">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ $editingId ? 'Update course details' : 'Register new course' }}</flux:heading>
+                <flux:text class="mt-1">Manage course information for your assigned institution.</flux:text>
+            </div>
+            <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Assigned institution</label>
+                    <select wire:model="institutionId" required class="w-full rounded-lg border-zinc-300 bg-white text-sm text-zinc-900 focus:border-cyan-600 focus:ring-cyan-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
+                        <option value="">Select institution</option>
+                        @foreach($this->institutions as $institution)
+                            <option value="{{ $institution->id }}">{{ $institution->code }} — {{ $institution->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('institutionId')<p class="mt-1 text-sm text-rose-600">{{ $message }}</p>@enderror
+                </div>
                 <flux:input wire:model="code" label="Course code" required placeholder="OAP-NC2" />
                 <flux:input wire:model="name" label="Course title" required />
                 <flux:input wire:model="qualificationLevel" label="Qualification level" placeholder="NC II" />
                 <flux:input wire:model="trainingHours" type="number" min="1" label="Duration (training hours)" />
                 <flux:input wire:model="curriculumReference" label="TESDA Curriculum reference" placeholder="Reference number or URL" />
                 <div class="md:col-span-2"><flux:textarea wire:model="description" label="Description" rows="2" /></div>
-                        <div class="md:col-span-2"><flux:textarea wire:model="requirements" label="Requirements" rows="2" /></div>
-                <div><label class="mb-1 block text-sm font-medium text-slate-700">Status</label><select wire:model="isActive" class="w-full rounded-lg border-slate-300 text-sm"><option value="1">Active</option><option value="0">Archived</option></select></div>
-                <div class="flex items-end justify-end gap-2"><flux:button variant="ghost" type="button" wire:click="$set('formOpen', false)">Cancel</flux:button><flux:button variant="primary" type="submit">Save Course</flux:button></div>
+                <div class="md:col-span-2"><flux:textarea wire:model="requirements" label="Requirements" rows="2" /></div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Status</label>
+                    <select wire:model="isActive" class="w-full rounded-lg border-zinc-300 bg-white text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
+                        <option value="1">Active</option><option value="0">Archived</option>
+                    </select>
+                </div>
+                <div class="flex items-end justify-end gap-2 md:col-span-2">
+                    <flux:button variant="ghost" type="button" wire:click="$set('formOpen', false)">Cancel</flux:button>
+                    <flux:button variant="primary" type="submit" wire:loading.attr="disabled" wire:target="save">{{ $editingId ? 'Save changes' : 'Save course' }}</flux:button>
+                </div>
             </form>
-        </flux:card>
-    @endif
+        </div>
+    </flux:modal>
+
+    <flux:modal name="focal-course-status-confirm-modal" wire:model="statusConfirmOpen" class="max-w-md">
+        <div class="space-y-5">
+            <div class="space-y-2">
+                <flux:heading size="lg">{{ $statusCourseActive ? 'Archive this course?' : 'Reactivate this course?' }}</flux:heading>
+                <flux:text>
+                    {{ $statusCourseActive ? 'The course will be hidden from active selections. Existing batches, enrollment records, and learner history will be retained.' : 'The course will become available for active selections again.' }}
+                </flux:text>
+                <p class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $statusCourseName }}</p>
+            </div>
+            <div class="flex justify-end gap-2">
+                <flux:button variant="ghost" wire:click="$set('statusConfirmOpen', false)">Cancel</flux:button>
+                <flux:button variant="{{ $statusCourseActive ? 'danger' : 'primary' }}" wire:click="confirmStatusChange" wire:loading.attr="disabled" wire:target="confirmStatusChange">
+                    {{ $statusCourseActive ? 'Archive course' : 'Reactivate course' }}
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
     <section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col gap-3 sm:flex-row"><div class="flex-1"><flux:input wire:model.live.debounce.300ms="search" placeholder="Search course code or title" icon="magnifying-glass" /></div><select wire:model.live="statusFilter" class="rounded-lg border-slate-300 text-sm"><option value="active">Active courses</option><option value="archived">Archived courses</option><option value="all">All courses</option></select></div>
         <div class="overflow-x-auto"><table class="w-full min-w-[900px] text-left text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-3 py-3">Institution</th><th class="px-3 py-3">Course</th><th class="px-3 py-3">Qualification / Hours</th><th class="px-3 py-3">Enrollment / Slots</th><th class="px-3 py-3">Schedule</th><th class="px-3 py-3">Status</th><th class="px-3 py-3">Actions</th></tr></thead><tbody class="divide-y divide-slate-100">
-        @forelse($this->courses as $course)<tr wire:key="focal-course-{{ $course->id }}"><td class="px-3 py-4">{{ $course->institution?->code }}<p class="text-xs text-slate-500">{{ $course->institution?->name }}</p></td><td class="px-3 py-4"><p class="font-bold">{{ $course->name }}</p><p class="text-xs text-slate-500">{{ $course->code }}</p>@if($course->curriculum_reference)<p class="mt-1 text-xs text-cyan-700">Curriculum: {{ $course->curriculum_reference }}</p>@endif</td><td class="px-3 py-4">{{ $course->qualification_level ?: '—' }}<p class="text-xs text-slate-500">{{ $course->training_hours ? $course->training_hours.' hours' : 'Hours not set' }}</p></td><td class="px-3 py-4"><p class="font-semibold">{{ $course->batches->sum('confirmed_trainees_count') }} enrolled</p><p class="text-xs text-slate-500">{{ $course->batches->sum(fn ($batch) => max(0, (int) $batch->capacity - (int) $batch->confirmed_trainees_count)) }} slots remaining · {{ $course->batches->count() }} current batch(es)</p></td><td class="px-3 py-4">{{ $course->batches->whereNotNull('starts_at')->min('starts_at')?->format('M j, Y') ?? '—' }}<p class="text-xs text-slate-500">to {{ $course->batches->whereNotNull('ends_at')->max('ends_at')?->format('M j, Y') ?? '—' }}</p></td><td class="px-3 py-4"><span class="rounded-full px-2 py-1 text-xs font-bold {{ $course->is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $course->is_active ? 'Active' : 'Archived' }}</span></td><td class="px-3 py-4"><div class="flex flex-wrap gap-2"><flux:button size="sm" variant="outline" wire:click="edit({{ $course->id }})">Edit</flux:button><flux:button size="sm" variant="ghost" wire:click="$set('historyCourseId', {{ $course->id }})">History</flux:button><flux:button size="sm" variant="ghost" wire:click="toggleStatus({{ $course->id }})" wire:confirm="{{ $course->is_active ? 'Archive this course? Existing records will be retained.' : 'Reactivate this course?' }}">{{ $course->is_active ? 'Archive' : 'Reactivate' }}</flux:button></div></td></tr>@empty<tr><td colspan="7" class="px-3 py-10 text-center text-slate-500">No matching courses exist for your assigned institutions.</td></tr>@endforelse
+        @forelse($this->courses as $course)<tr wire:key="focal-course-{{ $course->id }}"><td class="px-3 py-4">{{ $course->institution?->code }}<p class="text-xs text-slate-500">{{ $course->institution?->name }}</p></td><td class="px-3 py-4"><p class="font-bold">{{ $course->name }}</p><p class="text-xs text-slate-500">{{ $course->code }}</p>@if($course->curriculum_reference)<p class="mt-1 text-xs text-cyan-700">Curriculum: {{ $course->curriculum_reference }}</p>@endif</td><td class="px-3 py-4">{{ $course->qualification_level ?: '—' }}<p class="text-xs text-slate-500">{{ $course->training_hours ? $course->training_hours.' hours' : 'Hours not set' }}</p></td><td class="px-3 py-4"><p class="font-semibold">{{ $course->batches->sum('confirmed_trainees_count') }} enrolled</p><p class="text-xs text-slate-500">{{ $course->batches->sum(fn ($batch) => max(0, (int) $batch->capacity - (int) $batch->confirmed_trainees_count)) }} slots remaining · {{ $course->batches->count() }} current batch(es)</p></td><td class="px-3 py-4">{{ $course->batches->whereNotNull('starts_at')->min('starts_at')?->format('M j, Y') ?? '—' }}<p class="text-xs text-slate-500">to {{ $course->batches->whereNotNull('ends_at')->max('ends_at')?->format('M j, Y') ?? '—' }}</p></td><td class="px-3 py-4"><span class="rounded-full px-2 py-1 text-xs font-bold {{ $course->is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $course->is_active ? 'Active' : 'Archived' }}</span></td><td class="px-3 py-4"><div class="flex flex-wrap gap-2"><flux:button size="sm" variant="outline" wire:click="edit({{ $course->id }})">Edit</flux:button><flux:button size="sm" variant="ghost" wire:click="$set('historyCourseId', {{ $course->id }})">History</flux:button><flux:button size="sm" variant="ghost" wire:click="openStatusConfirm({{ $course->id }})">{{ $course->is_active ? 'Archive' : 'Reactivate' }}</flux:button></div></td></tr>@empty<tr><td colspan="7" class="px-3 py-10 text-center text-slate-500">No matching courses exist for your assigned institutions.</td></tr>@endforelse
         </tbody></table></div>
         <p class="text-xs text-slate-500">Course changes are recorded in the system activity log. Archiving hides a course from new active selections; existing training and learner history are retained.</p>
     </section>

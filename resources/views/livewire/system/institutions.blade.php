@@ -13,6 +13,10 @@ title('Institution Management');
 state([
     'formOpen' => false,
     'editingId' => null,
+    'confirmStatusId' => null,
+    'confirmStatusName' => '',
+    'confirmStatusAction' => '',
+    'statusModalOpen' => false,
     'code' => '',
     'name' => '',
     'address' => '',
@@ -124,8 +128,16 @@ ActivityLogger::record(
     );
 };
 
-$toggleStatus = function (int $id): void {
+$openStatusConfirmation = function (int $id): void {
     $institution = Institution::findOrFail($id);
+    $this->confirmStatusId = $institution->id;
+    $this->confirmStatusName = $institution->name;
+    $this->confirmStatusAction = $institution->is_active ? 'deactivate' : 'reactivate';
+    $this->statusModalOpen = true;
+};
+
+$toggleStatus = function (): void {
+    $institution = Institution::findOrFail($this->confirmStatusId);
     $before = ActivityLogger::snapshot($institution, ['is_active']);
     $institution->update([
         'is_active' => ! $institution->is_active,
@@ -143,6 +155,8 @@ $toggleStatus = function (int $id): void {
     ]
 );
 
+    $this->reset('confirmStatusId', 'confirmStatusName', 'confirmStatusAction');
+    $this->statusModalOpen = false;
     unset($this->institutions);
 
     Flux::toast(
@@ -171,8 +185,8 @@ $toggleStatus = function (int $id): void {
         </flux:button>
     </div>
 
-    @if ($formOpen)
-        <flux:card class="bg-white p-6 shadow-sm">
+    <flux:modal name="institution-form" wire:model="formOpen" class="max-w-3xl">
+        <div class="space-y-5">
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <flux:heading size="lg">
@@ -183,12 +197,7 @@ $toggleStatus = function (int $id): void {
                     </flux:text>
                 </div>
 
-                <flux:button
-                    variant="ghost"
-                    icon="x-mark"
-                    wire:click="$set('formOpen', false)"
-                    aria-label="Close form"
-                />
+                
             </div>
 
             <form wire:submit="save" class="mt-6 space-y-5">
@@ -243,8 +252,21 @@ $toggleStatus = function (int $id): void {
                     </flux:button>
                 </div>
             </form>
-        </flux:card>
-    @endif
+        </div>
+    </flux:modal>
+
+    <flux:modal name="institution-status-confirmation" wire:model="statusModalOpen" class="max-w-md">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ $confirmStatusAction === 'deactivate' ? 'Deactivate institution?' : 'Reactivate institution?' }}</flux:heading>
+                <flux:text class="mt-2">{{ $confirmStatusAction === 'deactivate' ? 'This will prevent ' . $confirmStatusName . ' from being selected for new operations. Existing records will be retained.' : 'This will make ' . $confirmStatusName . ' available again.' }}</flux:text>
+            </div>
+            <div class="flex justify-end gap-2">
+                <flux:button variant="ghost" type="button" wire:click="$set('statusModalOpen', false); $set('confirmStatusId', null); $set('confirmStatusName', ''); $set('confirmStatusAction', '')">Cancel</flux:button>
+                <flux:button variant="primary" type="button" wire:click="toggleStatus">{{ $confirmStatusAction === 'deactivate' ? 'Deactivate' : 'Reactivate' }}</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     <flux:card class="bg-white p-5 shadow-sm">
         <div class="mb-5">
@@ -313,8 +335,7 @@ $toggleStatus = function (int $id): void {
                                     <flux:button
                                         size="sm"
                                         variant="{{ $institution->is_active ? 'danger' : 'primary' }}"
-                                        wire:click="toggleStatus({{ $institution->id }})"
-                                        wire:confirm="Change this institution's active status?"
+                                        wire:click="openStatusConfirmation({{ $institution->id }})"
                                     >
                                         {{ $institution->is_active ? 'Deactivate' : 'Activate' }}
                                     </flux:button>

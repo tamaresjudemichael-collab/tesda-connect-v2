@@ -340,14 +340,15 @@ $restore = function (int $id): void {
     </div>
 
     @if ($formOpen && $canManageAnnouncements)
-        <flux:card class="bg-white p-5 shadow-sm sm:p-6">
-            <div class="flex items-start justify-between gap-4">
-                <div>
-                    <flux:heading size="lg">{{ $editingId ? 'Edit announcement' : 'Create announcement' }}</flux:heading>
-                    <flux:text class="mt-1">Save as a draft or publish now / schedule for a future time.</flux:text>
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Announcement form">
+            <div class="my-auto w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <flux:heading size="lg">{{ $editingId ? 'Edit announcement' : 'Create announcement' }}</flux:heading>
+                        <flux:text class="mt-1">Save as a draft or publish now / schedule for a future time.</flux:text>
+                    </div>
+                    <button type="button" wire:click="$set('formOpen', false)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900">×</button>
                 </div>
-                <flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" aria-label="Close form" />
-            </div>
 
             <form wire:submit="saveAnnouncement('published')" class="mt-6 space-y-5">
                 <div class="grid gap-5 md:grid-cols-2">
@@ -393,7 +394,8 @@ $restore = function (int $id): void {
                     <flux:button type="submit" variant="primary">Publish / schedule announcement</flux:button>
                 </div>
             </form>
-        </flux:card>
+            </div>
+        </div>
     @endif
 
     <flux:card class="bg-white p-4 shadow-sm sm:p-5">

@@ -57,6 +57,13 @@ state([
 
     'documentReviewRemarks' => '',
     'viewingApplicationId' => null,
+    'selectedReviewLearnerId' => null,
+    'selectedApprovalId' => null,
+    'selectedReturnId' => null,
+    'selectedDeleteId' => null,
+    'selectedDocumentApprovalId' => null,
+    'selectedDocumentRejectionId' => null,
+    'search' => '',
 
 ]);
 
@@ -484,6 +491,7 @@ $confirm = function (int $id): void {
 
     unset($this->applications);
 
+    $this->selectedApprovalId = null;
     Flux::toast(variant: 'success', text: 'Enrollment confirmed. Scholar ID: '.$scholarId);
 
 };
@@ -522,6 +530,7 @@ ActivityLogger::record(
 );
     unset($this->applications);
 
+    $this->selectedReturnId = null;
     Flux::toast(variant: 'warning', text: 'Application returned for revision.');
 
 };
@@ -562,6 +571,7 @@ ActivityLogger::record(
 );
     unset($this->applications);
 
+    $this->selectedDeleteId = null;
     Flux::toast(variant: 'success', text: 'Enrollment record deleted.');
 
 };
@@ -608,8 +618,9 @@ ActivityLogger::record(
         'document_type' => $document->document_type,
     ]
 );
-    unset($this->pendingDocuments);
+    unset($this->pendingDocuments, $this->reviewLearner, $this->reviewHistory);
 
+    $this->selectedDocumentApprovalId = null;
     Flux::toast(variant: 'success', text: 'Document verified successfully.');
 
 };
@@ -665,366 +676,223 @@ ActivityLogger::record(
 );
     $this->documentReviewRemarks = '';
 
-    unset($this->pendingDocuments);
+    unset($this->pendingDocuments, $this->reviewLearner, $this->reviewHistory);
 
+    $this->selectedDocumentRejectionId = null;
     Flux::toast(variant: 'warning', text: 'Document rejected. Review remarks saved.');
 
 };
 
+
+
+$reviewLearner = computed(function () {
+    if (! $this->selectedReviewLearnerId) return null;
+
+    return User::query()
+        ->with(['learnerProfile.institution', 'learnerDocuments.reviewer'])
+        ->whereKey($this->selectedReviewLearnerId)
+        ->whereHas('learnerProfile', fn ($query) => $query->whereIn('institution_id', $this->institutionIds))
+        ->first();
+});
+
+$reviewHistory = computed(function () {
+    if (! $this->selectedReviewLearnerId) return collect();
+
+    return LearnerDocument::query()
+        ->with('reviewer')
+        ->where('user_id', $this->selectedReviewLearnerId)
+        ->whereNotNull('reviewed_at')
+        ->latest('reviewed_at')
+        ->get();
+});
+
+$openReview = function (int $learnerId): void {
+    abort_unless(auth()->user()->hasRole('administrator', 'registrar'), 403);
+
+    $this->selectedReviewLearnerId = $learnerId;
+    $this->documentReviewRemarks = '';
+    $this->resetValidation();
+};
+
+$closeReview = function (): void {
+    $this->selectedReviewLearnerId = null;
+    $this->documentReviewRemarks = '';
+    $this->resetValidation();
+};
+
 ?>
 
-<div class="mx-auto max-w-7xl space-y-6">
+<div class="mx-auto max-w-7xl space-y-5">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            @if (auth()->user()->hasRole('administrator'))
+                <p class="text-sm font-semibold text-blue-700">Administrator oversight · Read only</p>
+                <flux:heading size="xl">Student Enrollment Submissions</flux:heading>
+                <flux:text>Monitor enrollment submissions across your accessible institutions.</flux:text>
+            @else
+                <p class="text-sm font-semibold text-cyan-700">Registrar workspace</p>
+                <flux:heading size="xl">Student Enrollment Submissions</flux:heading>
+                <flux:text>Review applications, learner documents, and enrollment decisions.</flux:text>
+            @endif
+        </div>
+        @if (auth()->user()->hasRole('registrar'))
+            <flux:button variant="primary" icon="user-plus" wire:click="openCreate">New learner record</flux:button>
+        @endif
+    </div>
 
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div>@if (auth()->user()->hasRole('administrator'))<p class="text-sm font-semibold text-blue-700">Administrator oversight · Read only</p><flux:heading size="xl" class="mt-1 text-3xl font-black">Student Enrollment Submissions</flux:heading><flux:text class="mt-1">View enrollment submissions across all institutions. Review, verification, confirmation, edits, and document decisions are reserved for the Registrar.</flux:text>@else<p class="text-sm font-semibold text-cyan-600">Registrar workspace</p><flux:heading size="xl" class="mt-1 text-3xl font-black">Enrollment Monitoring</flux:heading><flux:text class="mt-1">Review student-submitted MIS 03-01 registrations, verify requirements, and advance the enrollment workflow.</flux:text>@endif</div>@if (auth()->user()->hasRole('registrar'))<flux:button variant="primary" icon="user-plus" wire:click="openCreate">New learner record</flux:button>@endif</div>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        @foreach ([['All records', $this->applications->count()], ['Pending review', $this->applications->whereIn('application_status', ['submitted','under_review'])->count()], ['Verified', $this->applications->where('application_status','verified')->count()], ['Confirmed', $this->applications->where('application_status','confirmed')->count()]] as [$label, $count])
+            <flux:card class="p-4"><flux:text>{{ $label }}</flux:text><flux:heading size="xl" class="mt-1">{{ $count }}</flux:heading></flux:card>
+        @endforeach
+    </div>
 
+    <flux:card class="space-y-4 p-4 sm:p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <flux:heading size="lg">Enrollment applications</flux:heading>
+            <div class="w-full sm:max-w-xs"><flux:input wire:model.live.debounce.300ms="search" placeholder="Search learner, reference, email..." icon="magnifying-glass" /></div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            @foreach (['all' => 'All', 'submitted' => 'Submitted', 'returned_for_revision' => 'For revision', 'verified' => 'Verified', 'confirmed' => 'Confirmed'] as $value => $label)
+                <button wire:click="$set('status', '{{ $value }}')" class="rounded-full px-3 py-1.5 text-sm font-medium {{ $status === $value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200' }}">{{ $label }}</button>
+            @endforeach
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[950px] text-left text-sm">
+                <thead class="border-b text-xs uppercase tracking-wide text-slate-500"><tr>
+                    <th class="px-3 py-3">Learner</th><th class="px-3 py-3">Institution</th><th class="px-3 py-3">Course / Batch</th><th class="px-3 py-3">Completeness</th><th class="px-3 py-3">Status</th><th class="px-3 py-3 text-right">Actions</th>
+                </tr></thead>
+                <tbody class="divide-y">
+                    @forelse ($this->applications->filter(fn ($application) => blank($search) || str($application->learner_name.' '.$application->reference_no.' '.$application->email)->lower()->contains(str($search)->lower())) as $application)
+                        <tr wire:key="enrollment-{{ $application->id }}">
+                            <td class="px-3 py-4"><div class="font-semibold text-slate-900">{{ $application->learner_name }}</div><div class="mt-1 text-xs text-slate-500">{{ $application->reference_no }} · {{ $application->email ?: 'No email' }}</div></td>
+                            <td class="px-3 py-4"><div class="font-medium">{{ $application->institution?->code ?? 'N/A' }}</div><div class="text-xs text-slate-500">{{ $application->institution?->name ?? 'Not assigned' }}</div></td>
+                            <td class="px-3 py-4"><div>{{ $application->course?->name ?? 'Course pending' }}</div><div class="text-xs text-slate-500">{{ $application->trainingBatch?->name ?? 'Batch not assigned' }}</div></td>
+                            <td class="px-3 py-4"><div class="flex items-center gap-2"><div class="h-2 w-16 overflow-hidden rounded-full bg-slate-100"><div class="h-full bg-emerald-500" style="width: {{ $application->record_completeness }}%"></div></div><span class="text-xs font-semibold">{{ $application->record_completeness }}%</span></div></td>
+                            <td class="px-3 py-4"><flux:badge color="{{ in_array($application->application_status, ['verified','confirmed']) ? 'green' : ($application->application_status === 'returned_for_revision' ? 'red' : 'amber') }}">{{ str($application->application_status)->headline() }}</flux:badge>@if($application->forwarding_id)<div class="mt-1 text-xs font-semibold text-emerald-700">Ready for Scheduling</div>@endif</td>
+                            <td class="px-3 py-4"><div class="flex flex-wrap justify-end gap-1.5">
+                                <flux:button size="sm" variant="ghost" wire:click="$set('viewingApplicationId', {{ $application->id }})" icon="eye">View</flux:button>
+                                @if ($application->learner_user_id)
+                                    <flux:button size="sm" variant="outline" wire:click="openReview({{ $application->learner_user_id }})">Documents</flux:button>
+                                @endif
+                                @if (auth()->user()->hasRole('registrar'))
+                                    @if(in_array($application->application_status, ['under_review','submitted']))
+                                        <flux:button size="sm" variant="primary" wire:click="verify({{ $application->id }})">Verify</flux:button>
+                                        <flux:button size="sm" variant="ghost" wire:click="$set('selectedReturnId', {{ $application->id }})">Return</flux:button>
+                                    @endif
+                                    @if($application->application_status === 'verified' && ! $application->confirmed_at)
+                                        <flux:button size="sm" variant="primary" wire:click="$set('selectedApprovalId', {{ $application->id }})">Approve</flux:button>
+                                    @endif
+                                    <flux:button size="sm" variant="outline" wire:click="edit({{ $application->id }})">Edit</flux:button>
+                                    @if ($application->application_status !== 'confirmed')
+                                        <flux:button size="sm" variant="danger" wire:click="$set('selectedDeleteId', {{ $application->id }})">Delete</flux:button>
+                                    @endif
+                                @endif
+                            </div></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="px-3 py-12 text-center text-slate-500">No enrollment records match this filter.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </flux:card>
+
+    {{-- Create / Edit modal --}}
+    @if (auth()->user()->hasRole('registrar') && $formOpen)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" wire:key="enrollment-form-modal">
+            <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7">
+                <div class="flex items-start justify-between gap-4"><div><flux:heading size="lg">{{ $editingId ? 'Edit learner record' : 'New learner record' }}</flux:heading><flux:text>Staff-entered enrollment information.</flux:text></div><flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" /></div>
+                <form wire:submit="save" class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <flux:select wire:model.live="institution_id" label="Institution" required><flux:select.option value="">Select institution</flux:select.option>@foreach($this->institutions as $institution)<flux:select.option value="{{ $institution->id }}">{{ $institution->name }}</flux:select.option>@endforeach</flux:select>
+                    <flux:select wire:model.live="course_id" label="Course" required><flux:select.option value="">Select course</flux:select.option>@foreach($this->courses as $course)<flux:select.option value="{{ $course->id }}">{{ $course->name }}</flux:select.option>@endforeach</flux:select>
+                    <flux:select wire:model="training_batch_id" label="Batch"><flux:select.option value="">Not assigned yet</flux:select.option>@foreach($this->batches as $batch)<flux:select.option value="{{ $batch->id }}">{{ $batch->name }}</flux:select.option>@endforeach</flux:select>
+                    <flux:input wire:model="learner_name" label="Learner name" required /><flux:input wire:model="email" type="email" label="Email address" /><flux:input wire:model="contact_number" label="Contact number" /><flux:input wire:model="record_completeness" type="number" min="0" max="100" label="Record completeness (%)" required /><div class="sm:col-span-2 lg:col-span-3"><flux:textarea wire:model="remarks" label="Remarks" /></div>
+                    <div class="flex justify-end gap-2 sm:col-span-2 lg:col-span-3"><flux:button type="button" variant="ghost" wire:click="$set('formOpen', false)">Cancel</flux:button><flux:button type="submit" variant="primary">Save record</flux:button></div>
+                </form>
+            </div>
+        </div>
+    @endif
+
+    {{-- Application details modal --}}
     @if ($this->viewingApplication)
         @php($detail = $this->viewingApplication)
         @php($profile = $detail->learner?->learnerProfile)
-        <flux:card class="border-blue-200 bg-white p-5 shadow-sm">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Read-only application details</p><flux:heading size="lg" class="mt-1">{{ $detail->learner_name }}</flux:heading><flux:text class="mt-1">{{ $detail->reference_no }} · {{ $detail->institution?->code ?? 'No institution' }}</flux:text></div>
-                <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="$set('viewingApplicationId', null)">Close</flux:button>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6">
+            <div class="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7">
+                <div class="flex items-start justify-between"><div><flux:heading size="lg">{{ $detail->learner_name }}</flux:heading><flux:text>{{ $detail->reference_no }} · {{ $detail->institution?->name }}</flux:text></div><flux:button variant="ghost" icon="x-mark" wire:click="$set('viewingApplicationId', null)" /></div>
+                <dl class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach (['Email' => $detail->email ?: 'Not recorded', 'Contact number' => $detail->contact_number ?: 'Not recorded', 'Institution' => $detail->institution?->name ?: 'Not assigned', 'Course' => $detail->course?->name ?: 'Not assigned', 'Training batch' => $detail->trainingBatch?->name ?: 'Not assigned', 'Status' => str($detail->application_status)->headline(), 'Submitted' => $detail->submitted_at?->format('M j, Y g:i A') ?: 'Not submitted', 'Scholar ID' => $detail->scholar_id ?: 'Not issued', 'Completeness' => $detail->record_completeness.'%', 'Address' => $profile ? collect([$profile->address_line,$profile->barangay,$profile->city_municipality,$profile->province,$profile->region])->filter()->join(', ') : 'Not recorded', 'Birth date' => $profile?->birthdate?->format('M j, Y') ?: 'Not recorded', 'Educational attainment' => $profile?->educational_attainment ?: 'Not recorded', 'Remarks' => $detail->remarks ?: 'None'] as $label => $value)
+                        <div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ $label }}</dt><dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $value }}</dd></div>
+                    @endforeach
+                </dl>
+                <div class="mt-5 flex justify-end"><flux:button variant="primary" wire:click="$set('viewingApplicationId', null)">Close</flux:button></div>
             </div>
-            <dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                @foreach ([
-                    'Email' => $detail->email ?: 'Not recorded',
-                    'Contact number' => $detail->contact_number ?: 'Not recorded',
-                    'Institution' => $detail->institution?->name ?: 'Not assigned',
-                    'Course' => $detail->course?->name ?: 'Not assigned',
-                    'Training batch' => $detail->trainingBatch?->name ?: 'Not assigned',
-                    'Status' => str($detail->application_status)->headline(),
-                    'Submitted' => $detail->submitted_at?->format('M j, Y g:i A') ?: 'Not submitted',
-                    'Scholar ID' => $detail->scholar_id ?: 'Not issued',
-                    'Record completeness' => $detail->record_completeness.'%',
-                    'Address' => $profile ? collect([$profile->address_line, $profile->barangay, $profile->city_municipality, $profile->province, $profile->region])->filter()->join(', ') : 'Not recorded',
-                    'Birth date' => $profile?->birthdate?->format('M j, Y') ?: 'Not recorded',
-                    'Educational attainment' => $profile?->educational_attainment ?: 'Not recorded',
-                    'Sex' => $profile?->sex ? str($profile->sex)->headline() : 'Not recorded',
-                    'Civil status' => $profile?->civil_status ?: 'Not recorded',
-                    'Employment status' => $profile?->employment_status ?: 'Not recorded',
-                    'Remarks' => $detail->remarks ?: 'None',
-                ] as $label => $value)
-                    <div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ $label }}</dt><dd class="mt-1 break-words text-sm font-semibold text-slate-800">{{ $value }}</dd></div>
-                @endforeach
-            </dl>
-            @if ($detail->learner?->learnerDocuments?->isNotEmpty())
-                <div class="mt-4"><flux:heading size="sm">Uploaded documents</flux:heading><div class="mt-2 flex flex-wrap gap-2">@foreach ($detail->learner->learnerDocuments as $document)<a href="{{ route('learner-documents.download', $document->id) }}" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-slate-50">{{ $document->original_name }} · {{ str($document->status)->headline() }}</a>@endforeach</div></div>
-            @endif
-            @if (auth()->user()->hasRole('administrator'))<p class="mt-4 text-xs font-semibold text-slate-500">Read-only view. Only the Registrar may act on this application.</p>@endif
-        </flux:card>
+        </div>
     @endif
 
-    @if (auth()->user()->hasRole('registrar') && $formOpen)
-
-        <flux:card class="bg-white p-6 shadow-sm"><div class="flex items-start justify-between gap-4"><div><flux:heading size="lg">{{ $editingId ? 'Edit learner record' : 'New learner record' }}</flux:heading><flux:text class="mt-1">This creates a staff-entered intake record. Learners can later complete their full MIS 03-01 profile.</flux:text></div><flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" /></div><form wire:submit="save" class="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3"><flux:select wire:model.live="institution_id" label="Institution" required><flux:select.option value="">Select institution</flux:select.option>@foreach($this->institutions as $institution)<flux:select.option value="{{ $institution->id }}">{{ $institution->name }}</flux:select.option>@endforeach</flux:select><flux:select wire:model.live="course_id" label="Course" required><flux:select.option value="">Select course</flux:select.option>@foreach($this->courses as $course)<flux:select.option value="{{ $course->id }}">{{ $course->name }}</flux:select.option>@endforeach</flux:select><flux:select wire:model="training_batch_id" label="Batch"><flux:select.option value="">Not assigned yet</flux:select.option>@foreach($this->batches as $batch)<flux:select.option value="{{ $batch->id }}">{{ $batch->name }}</flux:select.option>@endforeach</flux:select><flux:input wire:model="learner_name" label="Learner name" required /><flux:input wire:model="email" type="email" label="Email address" /><flux:input wire:model="contact_number" label="Contact number" /><flux:input wire:model="record_completeness" type="number" min="0" max="100" label="Record completeness (%)" required /><flux:textarea wire:model="remarks" label="Remarks" class="lg:col-span-3" /><div class="flex justify-end gap-3 lg:col-span-3"><flux:button variant="ghost" type="button" wire:click="resetForm">Reset</flux:button><flux:button variant="primary" type="submit">Save record</flux:button></div></form>
-
-    </flux:card>
-
+    {{-- Per-learner document review modal with history tab --}}
+    @if ($this->reviewLearner)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" wire:key="learner-review-{{ $selectedReviewLearnerId }}">
+            <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7">
+                <div class="flex items-start justify-between"><div><flux:heading size="lg">Learner Document Review</flux:heading><flux:text>{{ $this->reviewLearner->name }} · {{ $this->reviewLearner->learnerProfile?->institution?->name }}</flux:text></div><flux:button variant="ghost" icon="x-mark" wire:click="closeReview" /></div>
+                <div class="mt-5 grid gap-3 sm:grid-cols-2"><flux:card class="p-3"><flux:text>Uploaded documents</flux:text><flux:heading size="xl">{{ $this->reviewLearner->learnerDocuments->count() }}</flux:heading></flux:card><flux:card class="p-3"><flux:text>Awaiting review</flux:text><flux:heading size="xl">{{ $this->reviewLearner->learnerDocuments->where('status','pending')->count() }}</flux:heading></flux:card></div>
+                <div class="mt-5"><flux:heading size="sm">Submitted documents</flux:heading><div class="mt-3 space-y-3">
+                    @forelse($this->reviewLearner->learnerDocuments as $document)
+                        <div class="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div class="min-w-0"><div class="font-semibold text-slate-900">{{ str($document->document_type)->headline() }}</div><div class="break-all text-sm text-slate-500">{{ $document->original_name }}</div><div class="mt-1 text-xs text-slate-500">{{ str($document->status)->headline() }} @if($document->reviewed_at) · {{ $document->reviewed_at->format('M d, Y g:i A') }} @endif</div>@if($document->remarks)<div class="mt-1 text-sm text-rose-700">Remarks: {{ $document->remarks }}</div>@endif</div><div class="flex flex-wrap gap-2"><flux:button size="sm" variant="outline" href="{{ route('learner-documents.download', $document->id) }}">Download</flux:button>@if(auth()->user()->hasRole('registrar') && $document->status === 'pending')<flux:button size="sm" variant="primary" wire:click="$set('selectedDocumentApprovalId', {{ $document->id }})">Approve document</flux:button><flux:button size="sm" variant="danger" wire:click="$set('selectedDocumentRejectionId', {{ $document->id }})">Reject document</flux:button>@endif</div></div>
+                    @empty
+                        <div class="rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">No documents have been uploaded by this learner.</div>
+                    @endforelse
+                </div></div>
+                <div class="mt-6"><flux:heading size="sm">Document Review History</flux:heading><div class="mt-3 overflow-x-auto"><table class="w-full min-w-[600px] text-left text-sm"><thead class="border-b text-xs uppercase text-slate-500"><tr><th class="px-3 py-2">Document</th><th class="px-3 py-2">Result</th><th class="px-3 py-2">Reviewed by</th><th class="px-3 py-2">Date</th><th class="px-3 py-2">Remarks</th></tr></thead><tbody class="divide-y">@forelse($this->reviewHistory as $history)<tr><td class="px-3 py-3">{{ str($history->document_type)->headline() }}<div class="text-xs text-slate-500">{{ $history->original_name }}</div></td><td class="px-3 py-3">{{ str($history->status)->headline() }}</td><td class="px-3 py-3">{{ $history->reviewer?->name ?? '—' }}</td><td class="px-3 py-3">{{ $history->reviewed_at?->format('M d, Y g:i A') }}</td><td class="px-3 py-3">{{ $history->remarks ?: '—' }}</td></tr>@empty<tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">No review history yet.</td></tr>@endforelse</tbody></table></div></div>
+                <div class="mt-5 flex justify-end"><flux:button wire:click="closeReview">Close</flux:button></div>
+            </div>
+        </div>
     @endif
 
-@if (auth()->user()->hasRole('administrator', 'registrar'))
-
-    <flux:card class="bg-white p-6 shadow-sm">
-
-        <div>
-
-            <flux:heading size="lg">Document Review History</flux:heading>
-
-            <flux:text class="mt-1">
-
-                View recently reviewed learner documents and their review results.
-
-            </flux:text>
-
-        </div>
-
-        <div class="mt-5 overflow-x-auto">
-
-            <table class="w-full min-w-[900px] text-left text-sm">
-
-                <thead class="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
-
-                    <tr>
-
-                        <th class="px-3 py-3">Learner</th>
-
-                        <th class="px-3 py-3">Document</th>
-
-                        <th class="px-3 py-3">Result</th>
-
-                        <th class="px-3 py-3">Reviewed by</th>
-
-                        <th class="px-3 py-3">Review date</th>
-
-                        <th class="px-3 py-3">Remarks</th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody class="divide-y divide-slate-100">
-
-                    @forelse ($this->reviewedDocuments as $document)
-
-                        <tr>
-
-                            <td class="px-3 py-4">
-
-                                <p class="font-semibold text-slate-800">
-
-                                    {{ $document->learner?->name ?? 'Unknown learner' }}
-
-                                </p>
-
-                                <p class="mt-1 text-xs text-slate-500">
-
-                                    {{ $document->profile?->institution?->name ?? 'Institution not assigned' }}
-
-                                </p>
-
-                            </td>
-
-                            <td class="px-3 py-4">
-
-                                <p class="font-semibold text-slate-800">
-
-                                    {{ str($document->document_type)->headline() }}
-
-                                </p>
-
-                                <p class="mt-1 break-all text-xs text-slate-500">
-
-                                    {{ $document->original_name }}
-
-                                </p>
-
-                            </td>
-
-                            <td class="px-3 py-4">
-
-                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold
-
-                                    {{ $document->status === 'verified'
-
-                                        ? 'bg-emerald-50 text-emerald-700'
-
-                                        : 'bg-rose-50 text-rose-700' }}">
-
-                                    {{ str($document->status)->headline() }}
-
-                                </span>
-
-                            </td>
-
-                            <td class="px-3 py-4 text-slate-600">
-
-                                {{ $document->reviewer?->name ?? 'Unknown reviewer' }}
-
-                            </td>
-
-                            <td class="px-3 py-4 text-slate-600">
-
-                                {{ $document->reviewed_at?->format('M d, Y h:i A') ?? '—' }}
-
-                            </td>
-
-                            <td class="px-3 py-4 text-slate-600">
-
-                                <span class="block max-w-xs whitespace-normal break-words">
-
-                                    {{ $document->remarks ?: '—' }}
-
-                                </span>
-
-                            </td>
-
-                        </tr>
-
-                    @empty
-
-                        <tr>
-
-                            <td colspan="6" class="px-3 py-10 text-center text-slate-400">
-
-                                No reviewed documents yet.
-
-                            </td>
-
-                        </tr>
-
-                    @endforelse
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-    </flux:card>
-
-@endif
-
-    <flux:card class="bg-white p-5 shadow-sm">
-
-        @if (auth()->user()->hasRole('administrator', 'registrar'))
-
-    <flux:card class="bg-white p-6 shadow-sm">
-
-        <div>
-
-            <flux:heading size="lg">Learner Document Review</flux:heading>
-
-            <flux:text class="mt-1">
-
-                Review uploaded learner documents for your assigned institution.
-
-            </flux:text>
-
-        </div>
-
-        @if (auth()->user()->hasRole('registrar'))
-            <div class="mt-5">
-                <flux:textarea wire:model="documentReviewRemarks" label="Rejection remarks" placeholder="Enter the reason if rejecting a document." />
-                @error('documentReviewRemarks')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-                <p class="mt-1 text-xs text-slate-500">Remarks are required when rejecting a document.</p>
+    {{-- Document approval confirmation modal --}}
+    @if ($selectedDocumentApprovalId && ($documentToApprove = $this->reviewLearner?->learnerDocuments->firstWhere('id', $selectedDocumentApprovalId)))
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3">
+            <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                <flux:heading size="lg">Approve learner document</flux:heading>
+                <flux:text class="mt-2">Mark {{ $documentToApprove->original_name }} as verified?</flux:text>
+                <div class="mt-5 flex justify-end gap-2">
+                    <flux:button variant="ghost" wire:click="$set('selectedDocumentApprovalId', null)">Cancel</flux:button>
+                    <flux:button variant="primary" wire:click="verifyDocument({{ $documentToApprove->id }})" wire:loading.attr="disabled">Confirm approval</flux:button>
+                </div>
             </div>
-        @endif
-
-        <div class="mt-5 overflow-x-auto">
-
-            <table class="w-full min-w-[800px] text-left text-sm">
-
-                <thead class="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
-
-                    <tr>
-
-                        <th class="px-3 py-3">Learner</th>
-
-                        <th class="px-3 py-3">Document</th>
-
-                        <th class="px-3 py-3">File size</th>
-
-                        <th class="px-3 py-3">Status</th>
-
-                        <th class="px-3 py-3 text-right">{{ auth()->user()->hasRole('registrar') ? 'Actions' : 'Access' }}</th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody class="divide-y divide-slate-100">
-
-                    @forelse ($this->pendingDocuments as $document)
-
-                        <tr>
-
-                            <td class="px-3 py-4">
-
-                                <p class="font-semibold text-slate-800">
-
-                                    {{ $document->learner?->name ?? 'Unknown learner' }}
-
-                                </p>
-
-                                <p class="mt-1 text-xs text-slate-500">
-
-                                    {{ $document->profile?->institution?->name ?? 'Institution not assigned' }}
-
-                                </p>
-
-                            </td>
-
-                            <td class="px-3 py-4">
-
-                                <p class="font-semibold text-slate-800">
-
-                                    {{ str($document->document_type)->headline() }}
-
-                                </p>
-
-                                <p class="mt-1 break-all text-xs text-slate-500">
-
-                                    {{ $document->original_name }}
-
-                                </p>
-
-                                <a
-
-                                    href="{{ route('learner-documents.download', $document->id) }}"
-
-                                    class="mt-2 inline-flex text-sm font-semibold text-blue-700 hover:text-blue-900"
-
-                                >
-
-                                    Download file
-
-                                </a>
-
-                            </td>
-
-                            <td class="px-3 py-4 text-slate-600">
-
-                                {{ number_format($document->size / 1024, 0) }} KB
-
-                            </td>
-
-                            <td class="px-3 py-4">
-
-                                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">
-
-                                    Pending
-
-                                </span>
-
-                            </td>
-
-                            <td class="px-3 py-4">
-                                @if (auth()->user()->hasRole('registrar'))
-                                    <div class="flex justify-end gap-2">
-                                        <flux:button size="sm" variant="primary" wire:click="verifyDocument({{ $document->id }})" wire:confirm="Verify this document?">Verify</flux:button>
-                                        <flux:button size="sm" variant="danger" wire:click="rejectDocument({{ $document->id }})" wire:confirm="Reject this document using the remarks above?">Reject</flux:button>
-                                    </div>
-                                @else
-                                    <div class="flex justify-end"><span class="text-xs font-semibold text-slate-400">Read only</span></div>
-                                @endif
-                            </td>
-
-                        </tr>
-
-                    @empty
-
-                        <tr>
-
-                            <td colspan="6" class="px-3 py-10 text-center text-slate-400">
-
-                                No pending learner documents for your assigned institution.
-
-                            </td>
-
-                        </tr>
-
-                    @endforelse
-
-                </tbody>
-
-            </table>
-
         </div>
+    @endif
 
-    </flux:card>
+    {{-- Document rejection modal --}}
+    @if ($selectedDocumentRejectionId && ($documentToReject = $this->reviewLearner?->learnerDocuments->firstWhere('id', $selectedDocumentRejectionId)))
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3">
+            <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                <flux:heading size="lg">Return document for correction</flux:heading>
+                <flux:text class="mt-2">Provide a reason for rejecting {{ $documentToReject->original_name }}.</flux:text>
+                <div class="mt-4">
+                    <flux:textarea wire:model="documentReviewRemarks" label="Remarks (required)" placeholder="Explain what needs to be corrected." />
+                    @error('documentReviewRemarks') <p class="mt-1 text-sm text-rose-600">{{ $message }}</p> @enderror
+                </div>
+                <div class="mt-5 flex justify-end gap-2">
+                    <flux:button variant="ghost" wire:click="$set('selectedDocumentRejectionId', null)">Cancel</flux:button>
+                    <flux:button variant="danger" wire:click="rejectDocument({{ $documentToReject->id }})" wire:loading.attr="disabled">Confirm rejection</flux:button>
+                </div>
+            </div>
+        </div>
+    @endif
 
-@endif
+    {{-- Approve enrollment confirmation modal --}}
+    @if ($selectedApprovalId && ($approval = $this->applications->firstWhere('id', $selectedApprovalId)))
+        <div class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-3"><div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><flux:heading size="lg">Approve enrollment</flux:heading><flux:text class="mt-2">Confirm {{ $approval->learner_name }} for {{ $approval->course?->name }}? This will issue a Scholar ID and update the learner account role.</flux:text><div class="mt-5 flex justify-end gap-2"><flux:button variant="ghost" wire:click="$set('selectedApprovalId', null)">Cancel</flux:button><flux:button variant="primary" wire:click="confirm({{ $approval->id }})" wire:loading.attr="disabled">Confirm approval</flux:button></div></div></div>
+    @endif
 
-    <div class="flex flex-wrap items-center gap-2"><span class="mr-2 text-sm font-semibold text-slate-600">Filter:</span>@foreach (['all' => 'All records', 'submitted' => 'Submitted', 'returned_for_revision' => 'For revision', 'verified' => 'Verified', 'confirmed' => 'Confirmed'] as $value => $label)<button wire:click="$set('status', '{{ $value }}')" class="rounded-full px-3 py-1.5 text-sm font-medium {{ $status === $value ? 'bg-[#102f68] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200' }}">{{ $label }}</button>@endforeach</div><div class="mt-5 overflow-x-auto"><table class="w-full min-w-[900px] text-left text-sm"><thead class="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400"><tr>
+    {{-- Return for revision confirmation modal --}}
+    @if ($selectedReturnId && ($returning = $this->applications->firstWhere('id', $selectedReturnId)))
+        <div class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-3"><div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><flux:heading size="lg">Return application</flux:heading><flux:text class="mt-2">Return {{ $returning->learner_name }}'s application for revision?</flux:text><div class="mt-5 flex justify-end gap-2"><flux:button variant="ghost" wire:click="$set('selectedReturnId', null)">Cancel</flux:button><flux:button variant="primary" wire:click="returnForRevision({{ $returning->id }})">Return for revision</flux:button></div></div></div>
+    @endif
 
-        <th class="px-3 py-3">Learner</th><th class="px-3 py-3">Institution</th><th class="px-3 py-3">Course / Batch</th>
-
-        <th class="px-3 py-3">Completeness</th><th class="px-3 py-3">Status</th><th class="px-3 py-3 text-right">{{ auth()->user()->hasRole('registrar') ? 'Actions' : 'View' }}</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($this->applications as $application)<tr><td class="px-3 py-4"><p class="font-semibold text-slate-800">{{ $application->learner_name }}</p><p class="mt-0.5 text-xs text-slate-400">{{ $application->reference_no }} · {{ $application->email }}</p>
-
-        </td><td class="px-3 py-4"><p class="font-semibold text-slate-800">{{ $application->institution?->code ?? 'N/A' }}</p><p class="mt-0.5 text-xs text-slate-500">{{ $application->institution?->name ?? 'Institution not assigned' }}</p></td><td class="px-3 py-4 text-slate-600">{{ $application->course?->name ?? 'Course pending' }}
-
-            <p class="mt-0.5 text-xs text-slate-400">{{ $application->trainingBatch?->name ?? 'Batch not assigned' }}</p></td><td class="px-3 py-4"><div class="flex items-center gap-2"><div class="h-2 w-20 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full {{ $application->record_completeness === 100 ? 'bg-emerald-500' : 'bg-amber-500' }}" style="width: {{ $application->record_completeness }}%"></div></div><span class="text-xs font-bold text-slate-600">{{ $application->record_completeness }}%</span></div></td><td class="px-3 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ in_array($application->application_status, ['verified','confirmed']) ? 'bg-emerald-50 text-emerald-700' : ($application->application_status === 'returned_for_revision' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700') }}">{{ Str::headline($application->application_status) }}</span>@if($application->forwarding_id)<p class="mt-1 text-xs font-bold text-emerald-700">Ready for Scheduling</p>@endif</td><td class="px-3 py-4 text-right"><div class="flex flex-wrap justify-end gap-2"><flux:button size="sm" variant="ghost" wire:click="$set('viewingApplicationId', {{ $application->id }})">View details</flux:button>@if (auth()->user()->hasRole('registrar'))@if(in_array($application->application_status, ['under_review', 'submitted']))<flux:button size="sm" variant="primary" wire:click="verify({{ $application->id }})">Verify</flux:button><flux:button size="sm" variant="ghost" wire:click="returnForRevision({{ $application->id }})">Return</flux:button>@endif @if($application->application_status === 'verified' && ! $application->confirmed_at)<flux:button size="sm" variant="primary" wire:click="confirm({{ $application->id }})" wire:confirm="Confirm this verified enrollment and issue a Scholar ID?">Confirm enrollment</flux:button>@endif <flux:button size="sm" variant="filled" wire:click="edit({{ $application->id }})">Edit</flux:button>@if ($application->application_status !== 'confirmed')<flux:button size="sm" variant="danger" wire:click="delete({{ $application->id }})" wire:confirm="Delete {{ $application->learner_name }}'s record? This cannot be undone.">Delete</flux:button>@endif @else<span class="self-center text-xs font-semibold text-slate-400">Read only</span>@endif</div></td></tr>@empty<tr><td colspan="6" class="px-3 py-12 text-center text-slate-400">No enrollment records match this filter.</td></tr>@endforelse</tbody></table></div>
-
-</flux:card>
-
+    {{-- Delete confirmation modal --}}
+    @if ($selectedDeleteId && ($deleting = $this->applications->firstWhere('id', $selectedDeleteId)))
+        <div class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-3"><div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><flux:heading size="lg">Delete enrollment record</flux:heading><flux:text class="mt-2">Delete {{ $deleting->learner_name }}'s enrollment record? This action cannot be undone. Confirmed scholar records are protected.</flux:text><div class="mt-5 flex justify-end gap-2"><flux:button variant="ghost" wire:click="$set('selectedDeleteId', null)">Cancel</flux:button><flux:button variant="danger" wire:click="delete({{ $deleting->id }})">Delete record</flux:button></div></div></div>
+    @endif
 </div>

@@ -1,0 +1,10 @@
+Flux UI icon fix
+
+The Documents action previously used icon="files", which is not available in this installed Flux UI icon set.
+The icon attribute has been removed. The Documents button label and Livewire action are unchanged.
+
+Replace:
+resources/views/livewire/enrollments/index.blade.php
+
+Then run:
+php artisan optimize:clear

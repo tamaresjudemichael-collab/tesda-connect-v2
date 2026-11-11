@@ -31,10 +31,10 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique([
-                'enrollment_application_id',
-                'competency_task_id',
-            ]);
+            $table->unique(
+                ['enrollment_application_id', 'competency_task_id'],
+                'comp_progress_enrollment_task_unique'
+            );
 
             $table->index(['status', 'assessed_at']);
         });

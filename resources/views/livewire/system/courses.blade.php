@@ -20,6 +20,10 @@ state([
     'qualification_level' => '',
     'training_hours' => '',
     'is_active' => '1',
+    'statusConfirmOpen' => false,
+    'statusCourseId' => null,
+    'statusCourseName' => '',
+    'statusCourseActive' => true,
 ]);
 
 $institutions = computed(fn () => Institution::query()
@@ -146,33 +150,45 @@ ActivityLogger::record(
     );
 };
 
-$toggleStatus = function (int $id): void {
+$openStatusConfirm = function (int $id): void {
     $course = Course::findOrFail($id);
-    $before = ActivityLogger::snapshot($course, ['is_active']);
+    $this->statusCourseId = $course->id;
+    $this->statusCourseName = $course->name;
+    $this->statusCourseActive = (bool) $course->is_active;
+    $this->statusConfirmOpen = true;
+};
 
-    $course->update([
-        'is_active' => ! $course->is_active,
-    ]);
-ActivityLogger::record(
-    $course->is_active ? 'course_activated' : 'course_deactivated',
-    ($course->is_active ? 'Activated' : 'Deactivated').' course '.$course->name,
-    (int) $course->institution_id,
-    [
-        'course_id' => $course->id,
-        'code' => $course->code,
-        'is_active' => (bool) $course->is_active,
-        'changes' => ActivityLogger::changes($course, $before),
-    ]
-);
+$confirmStatusChange = function (): void {
+    abort_unless($this->statusCourseId, 404);
+
+    $course = Course::findOrFail((int) $this->statusCourseId);
+    $before = ActivityLogger::snapshot($course, ['is_active']);
+    $course->update(['is_active' => ! $course->is_active]);
+
+    ActivityLogger::record(
+        $course->is_active ? 'course_activated' : 'course_deactivated',
+        ($course->is_active ? 'Activated' : 'Deactivated').' course '.$course->name,
+        (int) $course->institution_id,
+        [
+            'course_id' => $course->id,
+            'code' => $course->code,
+            'is_active' => (bool) $course->is_active,
+            'changes' => ActivityLogger::changes($course, $before),
+        ]
+    );
+
     unset($this->courses);
+    $this->statusConfirmOpen = false;
+    $this->statusCourseId = null;
+    $this->statusCourseName = '';
 
     Flux::toast(
         variant: 'success',
-        text: $course->is_active
-            ? 'Course activated successfully.'
-            : 'Course deactivated successfully.'
+        text: $course->is_active ? 'Course activated successfully.' : 'Course deactivated successfully.'
     );
 };
+
+
 ?>
 
 <div class="mx-auto max-w-7xl space-y-6">
@@ -215,105 +231,71 @@ ActivityLogger::record(
         </flux:card>
     </div>
 
-    @if ($formOpen)
-        <flux:card class="bg-white p-5 shadow-sm sm:p-6">
+    <flux:modal name="course-form-modal" wire:model="formOpen" class="w-full max-w-2xl">
+        <div class="space-y-6">
             <div class="flex items-start justify-between gap-4">
                 <div>
-                    <flux:heading size="lg">
-                        {{ $editingId ? 'Edit course' : 'Add a training course' }}
-                    </flux:heading>
-                    <flux:text class="mt-1">
-                        Select the institution that will offer this course.
-                    </flux:text>
+                    <flux:heading size="lg">{{ $editingId ? 'Edit course' : 'Add a training course' }}</flux:heading>
+                    <flux:text class="mt-1">Select the institution that will offer this course.</flux:text>
                 </div>
-
-                <flux:button
-                    variant="ghost"
-                    icon="x-mark"
-                    wire:click="$set('formOpen', false)"
-                    aria-label="Close form"
-                />
             </div>
 
-            <form wire:submit="save" class="mt-6 space-y-5">
+            <form wire:submit="save" class="space-y-5">
                 <div class="grid gap-5 md:grid-cols-2">
-                    <flux:select
-                        wire:model="institution_id"
-                        label="Institution"
-                        placeholder="Select an institution"
-                        required
-                    >
+                    <flux:select wire:model="institution_id" label="Institution" placeholder="Select an institution" required>
                         @foreach ($this->institutions as $institution)
-                            <flux:select.option :value="$institution->id">
-                                {{ $institution->name }} ({{ $institution->code }})
-                            </flux:select.option>
+                            <flux:select.option :value="$institution->id">{{ $institution->name }} ({{ $institution->code }})</flux:select.option>
                         @endforeach
                     </flux:select>
-
-                    <flux:input
-                        wire:model="code"
-                        label="Course code"
-                        placeholder="e.g. BPP-NC-II"
-                        required
-                    />
-
+                    <flux:input wire:model="code" label="Course code" placeholder="e.g. BPP-NC-II" required />
                     <div class="md:col-span-2">
-                        <flux:input
-                            wire:model="name"
-                            label="Course name"
-                            placeholder="e.g. Bread and Pastry Production NC II"
-                            required
-                        />
+                        <flux:input wire:model="name" label="Course name" placeholder="e.g. Bread and Pastry Production NC II" required />
                     </div>
-
-                    <flux:select
-                        wire:model="qualification_level"
-                        label="Qualification level"
-                        placeholder="Select qualification level"
-                    >
+                    <flux:select wire:model="qualification_level" label="Qualification level" placeholder="Select qualification level">
                         <flux:select.option value="NC I">NC I</flux:select.option>
                         <flux:select.option value="NC II">NC II</flux:select.option>
                         <flux:select.option value="NC III">NC III</flux:select.option>
                         <flux:select.option value="NC IV">NC IV</flux:select.option>
                         <flux:select.option value="Other">Other</flux:select.option>
                     </flux:select>
-
-                    <flux:input
-                        wire:model="training_hours"
-                        label="Training hours"
-                        type="number"
-                        min="1"
-                        max="65535"
-                        placeholder="e.g. 141"
-                    />
-
+                    <flux:input wire:model="training_hours" label="Training hours" type="number" min="1" max="65535" placeholder="e.g. 141" />
                     <flux:select wire:model="is_active" label="Course status" required>
                         <flux:select.option value="1">Active</flux:select.option>
                         <flux:select.option value="0">Inactive</flux:select.option>
                     </flux:select>
                 </div>
-
-                <div class="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
-                    <flux:button
-                        variant="ghost"
-                        type="button"
-                        wire:click="resetForm"
-                    >
-                        Reset form
-                    </flux:button>
-
-                    <flux:button
-                        variant="primary"
-                        type="submit"
-                        wire:loading.attr="disabled"
-                        wire:target="save"
-                    >
+                <div class="flex flex-wrap justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                    <flux:button variant="ghost" type="button" wire:click="$set('formOpen', false)">Cancel</flux:button>
+                    <flux:button variant="primary" type="submit" wire:loading.attr="disabled" wire:target="save">
                         {{ $editingId ? 'Save changes' : 'Save course' }}
                     </flux:button>
                 </div>
             </form>
-        </flux:card>
-    @endif
+        </div>
+    </flux:modal>
+
+    <flux:modal name="course-status-confirm-modal" wire:model="statusConfirmOpen" class="max-w-md">
+        <div class="space-y-5">
+            <div class="flex items-start gap-3">
+                <div class="rounded-full p-2 {{ $statusCourseActive ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' }}">
+                    <flux:icon name="{{ $statusCourseActive ? 'archive-box' : 'arrow-path' }}" class="size-5" />
+                </div>
+                <div class="space-y-1">
+                    <flux:heading size="lg">{{ $statusCourseActive ? 'Deactivate course?' : 'Activate course?' }}</flux:heading>
+                    <flux:text>
+                        {{ $statusCourseActive ? 'This will make the course unavailable for new active selections. Existing batches and learner records will be retained.' : 'This will make the course available for active selections again.' }}
+                    </flux:text>
+                    <p class="pt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{{ $statusCourseName }}</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2">
+                <flux:button variant="ghost" wire:click="$set('statusConfirmOpen', false)">Cancel</flux:button>
+                <flux:button variant="{{ $statusCourseActive ? 'danger' : 'primary' }}" wire:click="confirmStatusChange" wire:loading.attr="disabled" wire:target="confirmStatusChange">
+                    {{ $statusCourseActive ? 'Deactivate course' : 'Activate course' }}
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     <flux:card class="bg-white p-5 shadow-sm sm:p-6">
         <div class="mb-5">
@@ -389,8 +371,7 @@ ActivityLogger::record(
                                     <flux:button
                                         size="sm"
                                         variant="{{ $course->is_active ? 'danger' : 'primary' }}"
-                                        wire:click="toggleStatus({{ $course->id }})"
-                                        wire:confirm="Change this course's active status?"
+                                        wire:click="openStatusConfirm({{ $course->id }})"
                                     >
                                         {{ $course->is_active ? 'Deactivate' : 'Activate' }}
                                     </flux:button>

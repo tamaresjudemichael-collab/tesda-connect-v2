@@ -5,7 +5,7 @@ use App\Models\EnrollmentApplication;
 use function Livewire\Volt\{computed, layout, mount, title};
 
 layout('layouts::app');
-title('My Course Materials');
+// title('My Course Materials');
 
 mount(function (): void {
     abort_unless(auth()->user()?->account_status === 'active' && auth()->user()->hasRole('applicant', 'scholar'), 403);

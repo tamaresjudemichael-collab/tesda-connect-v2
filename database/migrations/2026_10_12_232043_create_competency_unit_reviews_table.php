@@ -32,10 +32,10 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique([
-                'enrollment_application_id',
-                'competency_unit_id',
-            ]);
+            $table->unique(
+                ['enrollment_application_id', 'competency_unit_id'],
+                'cur_enroll_comp_unique'
+            );
 
             $table->index(['status', 'is_locked']);
         });

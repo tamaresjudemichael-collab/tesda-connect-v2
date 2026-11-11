@@ -22,7 +22,10 @@ return new class extends Migration
                 ->nullOnDelete();
             $table->timestamps();
 
-            $table->unique(['enrollment_application_id', 'attendance_date']);
+            $table->unique(
+                ['enrollment_application_id', 'attendance_date'],
+                'att_enroll_date_unique'
+            );
             $table->index(['attendance_date', 'status']);
         });
     }

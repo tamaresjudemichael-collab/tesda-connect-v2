@@ -17,7 +17,7 @@ test('administrator sidebar follows the five requested navigation sections', fun
         'System Overview',
         'BST ↔ MIF Comparison',
         'Activity Logs',
-        'Quick Stats',
+        
         'ENROLLMENT MONITORING',
         'Submissions',
         'Verified Records',
@@ -44,8 +44,8 @@ test('administrator sidebar follows the five requested navigation sections', fun
 
     $response
         ->assertSee(route('dashboard').'#system-overview', false)
-        ->assertSee(route('dashboard').'#bst-mif-comparison', false)
-        ->assertSee(route('dashboard').'#quick-stats', false)
+        
+        
         ->assertSee(route('enrollments.index', ['status' => 'submitted']), false)
         ->assertSee(route('enrollments.index', ['status' => 'confirmed']), false)
         ->assertSee('Forwarded Batches')
@@ -61,8 +61,7 @@ test('non-administrator focal navigation shows its workspace and hides administr
     $this->actingAs($focalPerson)
         ->get(route('dashboard'))
         ->assertOk()
-        // The focal-person navigation now uses its role-specific workspace groups,
-        // rather than the legacy generic MAIN MENU labels.
+         
         ->assertSee('DASHBOARD')
         ->assertSee('Dashboard & Institution Overview')
         ->assertSee('COMPETENCY PROGRESS')

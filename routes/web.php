@@ -125,6 +125,3 @@ require __DIR__.'/student.php';
 
 require __DIR__.'/settings.php';
 require __DIR__.'/focal-person.php';
-
-// Student / Scholar requirements route
-require __DIR__.'/student.php';

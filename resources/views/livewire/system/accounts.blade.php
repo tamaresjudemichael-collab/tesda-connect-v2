@@ -295,12 +295,7 @@ ActivityLogger::record(
                     </flux:text>
                 </div>
 
-                <flux:button
-                    variant="ghost"
-                    icon="x-mark"
-                    wire:click="$set('formOpen', false)"
-                    aria-label="Close form"
-                />
+               
             </div>
 
             <form wire:submit="save" class="mt-6 space-y-5">

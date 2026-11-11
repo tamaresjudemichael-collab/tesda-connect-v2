@@ -29,28 +29,30 @@
         <form method="POST" action="{{ route('login.store') }}" class="mt-7 flex flex-col gap-5">
             @csrf
 
-                        <flux:input
+            <flux:input
                 name="email"
                 :label="__('Email address')"
-                :value="old('email', app()->environment('local') ? 'admin@tesdaconnect.test' : '')"
                 type="email"
+                value=""
                 required
                 autofocus
-                autocomplete="email"
+                autocomplete="off"
                 placeholder="you@example.com"
-class="[--flux-input-background:#ffffff] [--flux-input-border-color:#d1d5db] [--flux-input-color:#111827] [--flux-input-placeholder-color:#6b7280] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"            />
+                class="[--flux-input-background:#ffffff] [--flux-input-border-color:#d1d5db] [--flux-input-color:#111827] [--flux-input-placeholder-color:#6b7280] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"
+            />
 
             <div class="relative">
                 <flux:input
                     name="password"
                     :label="__('Password')"
                     type="password"
+                    value=""
                     required
-                    autocomplete="current-password"
-                    :value="app()->environment('local') ? 'admin123' : ''"
+                    autocomplete="off"
                     :placeholder="__('Enter your password')"
                     viewable
-class="[--flux-input-background:#ffffff] [--flux-input-border-color:#d1d5db] [--flux-input-color:#111827] [--flux-input-placeholder-color:#6b7280] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"                />
+                    class="[--flux-input-background:#ffffff] [--flux-input-border-color:#d1d5db] [--flux-input-color:#111827] [--flux-input-placeholder-color:#6b7280] [&_.\[\:where\(\&\)\]\:text-zinc-800]:!text-white [&_[data-flux-label]]:!text-white [&_label]:!text-white [&_label]:!opacity-100"
+                />
 
                 @if (Route::has('password.request'))
                     <flux:link

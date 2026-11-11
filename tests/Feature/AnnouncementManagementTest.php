@@ -115,8 +115,8 @@ test('learner portal records a unique view for a published learner announcement'
 
     $this->actingAs($learner);
 
-    Livewire::test('learner.portal')->assertSee('Learner safety briefing');
-    Livewire::test('learner.portal')->assertSee('Learner safety briefing');
+    Livewire::test('learner.announcements')->assertSee('Learner safety briefing');
+    Livewire::test('learner.announcements')->assertSee('Learner safety briefing');
 
     expect($announcement->views()->count())->toBe(1)
         ->and($announcement->views()->first()?->user_id)->toBe($learner->id);
@@ -145,7 +145,7 @@ test('learner portal does not display expired or archived announcements', functi
 
     $this->actingAs($learner);
 
-    Livewire::test('learner.portal')
+    Livewire::test('learner.announcements')
         ->assertDontSee('Expired learner message')
         ->assertDontSee('Archived learner message');
 });

@@ -1,0 +1,24 @@
+TESDAConnect - Course Management Modal Update
+
+Files to replace:
+1. resources/views/livewire/system/courses.blade.php
+2. resources/views/livewire/focal/courses.blade.php
+
+Changes:
+- Add Course / Register New Course now opens a Flux modal.
+- Edit opens the same modal with the selected course values populated.
+- Deactivate / Archive and Activate / Reactivate now open a confirmation modal.
+- Existing validation, course persistence, institution scoping, activity logging,
+  course history, search, filters, and batch/learner relationships are retained.
+- No database migration is required.
+
+Before applying:
+1. Back up both original Blade files.
+2. Extract this ZIP at the Laravel project root, preserving the folder paths.
+3. Replace the two files when prompted.
+
+After applying, run:
+php artisan optimize:clear
+php artisan test
+
+Then test both Administrator and Focal Person accounts in the browser.

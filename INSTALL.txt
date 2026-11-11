@@ -1,0 +1,11 @@
+Flux download icon compatibility fix
+
+Replace:
+resources/views/livewire/enrollments/index.blade.php
+
+This update removes the unsupported Flux icon="download" attribute from the Download button. The button label and its existing route remain unchanged.
+
+Then run:
+php artisan optimize:clear
+
+Refresh Student Enrollment Submissions and test downloading a learner document.

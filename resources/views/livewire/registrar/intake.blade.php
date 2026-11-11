@@ -15,6 +15,7 @@ title('Intake Acceptance & Quotas');
 
 state([
     'formOpen' => false,
+    'quotaFormOpen' => false,
     'editingId' => null,
     'institution_id' => '',
     'selectedPeriodId' => '',
@@ -199,7 +200,7 @@ $saveCourseQuota = function (): void {
         ['quota' => (int) $validated['courseQuota'], 'created_by_user_id' => auth()->id()]
     );
     ActivityLogger::record('intake_course_quota_updated', 'Set intake quota for '.$quota->course->name.'.', (int) $quota->course->institution_id, ['intake_period_id' => $period->id, 'course_id' => $quota->course_id, 'quota' => $quota->quota]);
-    $this->quotaCourseId = ''; $this->courseQuota = 20;
+    $this->quotaCourseId = ''; $this->courseQuota = 20; $this->quotaFormOpen = false;
     unset($this->courseQuotaRows);
     Flux::toast(variant: 'success', text: 'Course quota saved.');
 };
@@ -220,7 +221,7 @@ $deleteCourseQuota = function (int $id): void {
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-semibold text-blue-700">Enrollment Management</p><flux:heading size="xl" class="mt-1 text-3xl font-black">Intake Acceptance & Quotas</flux:heading><flux:text class="mt-1">Open or close application windows, set total and per-course quotas, and monitor remaining slots for your assigned institution(s).</flux:text></div><flux:button variant="primary" icon="plus" wire:click="openCreate">New intake period</flux:button></div>
 
     @if ($formOpen)
-        <flux:card class="bg-white p-5 shadow-sm"><div class="flex items-center justify-between"><flux:heading size="lg">{{ $editingId ? 'Edit intake period' : 'Create intake period' }}</flux:heading><flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" /></div>
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Intake period form"><div class="my-auto w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div class="flex items-center justify-between gap-3"><flux:heading size="lg">{{ $editingId ? 'Edit intake period' : 'Create intake period' }}</flux:heading><button type="button" wire:click="$set('formOpen', false)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900">×</button></div>
             <form wire:submit="savePeriod" class="mt-5 grid gap-4 md:grid-cols-2">
                 <flux:select wire:model="institution_id" label="Institution" required>@foreach ($this->institutions as $institution)<flux:select.option value="{{ $institution->id }}">{{ $institution->code }} — {{ $institution->name }}</flux:select.option>@endforeach</flux:select>
                 <flux:input wire:model="code" label="Period code" required />
@@ -232,7 +233,7 @@ $deleteCourseQuota = function (int $id): void {
                 @error('starts_at')<p class="text-sm text-rose-700 md:col-span-2">{{ $message }}</p>@enderror
                 <div class="flex justify-end gap-2 md:col-span-2"><flux:button type="button" variant="ghost" wire:click="$set('formOpen', false)">Cancel</flux:button><flux:button type="submit" variant="primary">Save period</flux:button></div>
             </form>
-        </flux:card>
+        </div></div>
     @endif
 
     <div class="grid gap-4 lg:grid-cols-2">
@@ -244,7 +245,19 @@ $deleteCourseQuota = function (int $id): void {
 
         <flux:card class="bg-white p-5 shadow-sm"><flux:heading size="lg">Per-course quota</flux:heading><flux:text class="mt-1">{{ $this->selectedPeriod?->name ?? 'Select an intake period first' }}</flux:text>
             @if ($this->selectedPeriod)
-                <form wire:submit="saveCourseQuota" class="mt-4 space-y-3 rounded-xl bg-slate-50 p-4"><flux:select wire:model="quotaCourseId" label="Course" required><flux:select.option value="">Choose course</flux:select.option>@foreach ($this->courses as $course)<flux:select.option value="{{ $course->id }}">{{ $course->institution?->code }} · {{ $course->name }}</flux:select.option>@endforeach</flux:select><flux:input wire:model="courseQuota" type="number" min="1" label="Course quota" required/><div class="flex justify-end"><flux:button type="submit" variant="primary">Save course quota</flux:button></div></form>
+                <div class="mt-4"><flux:button type="button" variant="primary" wire:click="$set('quotaFormOpen', true)">Add / update course quota</flux:button></div>
+                @if ($quotaFormOpen)
+                    <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Course quota form">
+                        <div class="my-auto w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl">
+                            <div class="mb-4 flex items-center justify-between gap-3"><flux:heading size="lg">Add / update course quota</flux:heading><button type="button" wire:click="$set('quotaFormOpen', false)" aria-label="Close modal" class="rounded-lg px-3 py-2 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900">×</button></div>
+                            <form wire:submit="saveCourseQuota" class="space-y-3">
+                                <flux:select wire:model="quotaCourseId" label="Course" required><flux:select.option value="">Choose course</flux:select.option>@foreach ($this->courses as $course)<flux:select.option value="{{ $course->id }}">{{ $course->institution?->code }} · {{ $course->name }}</flux:select.option>@endforeach</flux:select>
+                                <flux:input wire:model="courseQuota" type="number" min="1" label="Course quota" required/>
+                                <div class="flex justify-end gap-2"><flux:button type="button" variant="ghost" wire:click="$set('quotaFormOpen', false)">Cancel</flux:button><flux:button type="submit" variant="primary">Save course quota</flux:button></div>
+                            </form>
+                        </div>
+                    </div>
+                @endif
                 <div class="mt-4 space-y-3">@forelse ($this->courseQuotaRows as $row)<div class="rounded-xl border border-slate-200 p-4" wire:key="course-quota-{{ $row->id }}"><div class="flex justify-between gap-2"><div><p class="font-semibold text-slate-900">{{ $row->course->name }}</p><p class="mt-1 text-xs text-slate-500">{{ $row->actual_count }} / {{ $row->quota }} submitted · {{ $row->remaining }} remaining</p></div><flux:button size="xs" variant="ghost" wire:click="deleteCourseQuota({{ $row->id }})" wire:confirm="Remove this quota?">Remove</flux:button></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full {{ $row->remaining === 0 ? 'bg-rose-500' : 'bg-cyan-600' }}" style="width: {{ min(100, (int) round(($row->actual_count / max(1, $row->quota)) * 100)) }}%"></div></div></div>@empty<p class="mt-5 rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">No per-course quotas yet. Add one above to apply a course-specific cap.</p>@endforelse</div>
             @else<div class="mt-5 rounded-xl border border-dashed p-8 text-center text-sm text-slate-500">Create or select an intake period to configure course quotas.</div>@endif
         </flux:card>

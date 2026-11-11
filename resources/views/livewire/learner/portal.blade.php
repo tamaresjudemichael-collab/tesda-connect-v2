@@ -215,14 +215,6 @@ $certificateEligibility = computed(fn () => $this->application
 @php
     // Resolve Volt computed properties once in component context, then use local variables in Blade loops.
     $record = $this->application;
-    $portalAnnouncements = $this->announcements;
-    $portalDocuments = $this->documents;
-    $portalCompetencyUnits = $this->competencyUnits;
-    $portalCompetencySummary = $this->competencySummary;
-    $portalAttendanceRecords = $this->attendanceRecords;
-    $portalAttendanceSummary = $this->attendanceSummary;
-    $portalCertificate = $this->trainingCertificate;
-    $portalCertificateEligibility = $this->certificateEligibility;
     $portalStatusHistory = $record?->statusHistories?->sortBy('created_at')->values() ?? collect();
     $applicationGuidance = match ($record?->application_status) {
         'draft' => ['title' => 'Continue your application', 'body' => 'Complete the required fields and documents, then submit your registration.', 'action' => true],
@@ -305,7 +297,7 @@ $certificateEligibility = computed(fn () => $this->application
             <p class="text-sm font-semibold text-slate-500">Unread Announcements</p>
             <p class="mt-4 text-2xl font-black {{ $unreadAnnouncementCount > 0 ? 'text-blue-700' : 'text-slate-900' }}">{{ $unreadAnnouncementCount }}</p>
             <p class="mt-1 text-xs text-slate-500">Unread updates for your account</p>
-            <a href="#student-announcements" class="mt-3 inline-flex text-sm font-bold text-blue-700 hover:text-cyan-700">View announcements ↓</a>
+            <a href="{{ route('learner.announcements') }}" wire:navigate class="mt-3 inline-flex text-sm font-bold text-blue-700 hover:text-cyan-700">View announcements →</a>
         </article>
     </section>
 
@@ -692,8 +684,9 @@ $certificateEligibility = computed(fn () => $this->application
             </div>
         </section>
 
- 
-        <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        {{-- These detailed panels now have dedicated learner pages in the sidebar. --}}
+        @if (false)
+        <section id="student-learning-progress" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
             <h3 class="text-xl font-black text-slate-900">Learning progress</h3>
             <p class="mt-1 text-sm text-slate-500">
                 Track registration and training preparation. This section does not display grades or assessment scores.
@@ -730,7 +723,7 @@ $certificateEligibility = computed(fn () => $this->application
         </section>
 
         @if ($record->application_status === 'confirmed')
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+            <section id="student-competency-progress" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h3 class="text-xl font-black text-slate-900">Training competency progress</h3>
@@ -780,7 +773,7 @@ $certificateEligibility = computed(fn () => $this->application
                 @endif
             </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+            <section id="student-attendance" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div><h3 class="text-xl font-black text-slate-900">My attendance</h3><p class="mt-1 text-sm text-slate-500">Attendance records saved by authorized training staff.</p></div>
                     <span class="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">{{ $portalAttendanceSummary['total'] }} recorded session(s)</span>
@@ -804,7 +797,7 @@ $certificateEligibility = computed(fn () => $this->application
                 </div>
             </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+            <section id="student-certification" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h3 class="text-xl font-black text-slate-900">Certification & Completion</h3>
@@ -852,6 +845,7 @@ $certificateEligibility = computed(fn () => $this->application
                 @endif
             </section>
         @endif
+        @endif
     @else
         <section class="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
             <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-2xl font-black text-blue-700">
@@ -873,7 +867,8 @@ $certificateEligibility = computed(fn () => $this->application
         </section>
     @endif
 
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+    @if (false)
+    <section id="student-documents" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h3 class="text-xl font-black text-slate-900">My documents</h3>
@@ -965,6 +960,8 @@ $certificateEligibility = computed(fn () => $this->application
             @endforelse
         </div>
     </section>
+
+        @endif
 
 </div>
  

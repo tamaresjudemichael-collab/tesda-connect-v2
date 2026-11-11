@@ -14,6 +14,9 @@ title('Scheduling Management');
 state([
     'formOpen' => false,
     'editingId' => null,
+    'deleteId' => null,
+    'deleteName' => '',
+    'deleteModalOpen' => false,
     'institution_id' => null,
     'course_id' => null,
     'code' => '',
@@ -93,6 +96,13 @@ $save = function (): void {
         'status' => ['required', Rule::in(['upcoming', 'in_training', 'completed', 'cancelled'])],
     ]);
 
+    // Livewire does not automatically convert empty strings to NULL.
+    // MySQL DATETIME columns reject an empty string, so normalize optional fields.
+    $validated['next_class_at'] = filled($validated['next_class_at'] ?? null)
+        ? \Illuminate\Support\Carbon::parse($validated['next_class_at'])
+        : null;
+    $validated['venue'] = filled($validated['venue'] ?? null) ? trim($validated['venue']) : null;
+
     if ($this->editingId) {
         $batch = TrainingBatch::findOrFail($this->editingId);
         abort_unless($this->institutionIds->contains($batch->institution_id), 403);
@@ -107,10 +117,21 @@ $save = function (): void {
     Flux::toast(variant: 'success', text: 'Batch schedule saved.');
 };
 
-$delete = function (int $id): void {
+$openDelete = function (int $id): void {
     $batch = TrainingBatch::findOrFail($id);
     abort_unless($this->institutionIds->contains($batch->institution_id), 403);
+    $this->deleteId = $batch->id;
+    $this->deleteName = $batch->name;
+    $this->deleteModalOpen = true;
+};
+
+$delete = function (): void {
+    $batch = TrainingBatch::findOrFail($this->deleteId);
+
+    abort_unless($this->institutionIds->contains($batch->institution_id), 403);
     $batch->delete();
+    $this->reset('deleteId', 'deleteName');
+    $this->deleteModalOpen = false;
     unset($this->batches);
     Flux::toast(variant: 'success', text: 'Batch schedule deleted.');
 };
@@ -119,8 +140,8 @@ $delete = function (int $id): void {
 <div class="mx-auto max-w-7xl space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-semibold text-cyan-600">Operations workspace</p><flux:heading size="xl" class="mt-1 text-3xl font-black">Scheduling Management</flux:heading><flux:text class="mt-1">Coordinate batches, orientation dates, and the training calendar.</flux:text></div><flux:button variant="primary" icon="calendar-days" wire:click="openCreate">Add schedule</flux:button></div>
 
-    @if ($formOpen)
-        <flux:card class="bg-white p-6 shadow-sm"><div class="flex items-start justify-between gap-4"><div><flux:heading size="lg">{{ $editingId ? 'Edit batch schedule' : 'Add batch schedule' }}</flux:heading><flux:text class="mt-1">Create or update the training batch details.</flux:text></div><flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" /></div><form wire:submit="save" class="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3"><flux:select wire:model.live="institution_id" label="Institution" required><flux:select.option value="">Select institution</flux:select.option>@foreach($this->institutions as $institution)<flux:select.option value="{{ $institution->id }}">{{ $institution->name }}</flux:select.option>@endforeach</flux:select>
+    <flux:modal name="schedule-form" wire:model="formOpen" class="max-w-5xl">
+        <div class="space-y-5"><div class="flex items-start justify-between gap-4"><div><flux:heading size="lg">{{ $editingId ? 'Edit batch schedule' : 'Add batch schedule' }}</flux:heading><flux:text class="mt-1">Create or update the training batch details.</flux:text></div><flux:button variant="ghost" icon="x-mark" wire:click="$set('formOpen', false)" /></div><form wire:submit="save" class="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3"><flux:select wire:model.live="institution_id" label="Institution" required><flux:select.option value="">Select institution</flux:select.option>@foreach($this->institutions as $institution)<flux:select.option value="{{ $institution->id }}">{{ $institution->name }}</flux:select.option>@endforeach</flux:select>
 <flux:select
     wire:key="schedule-course-select-{{ $institution_id ?: 'none' }}"
     wire:model="course_id"
@@ -134,8 +155,9 @@ $delete = function (int $id): void {
         </flux:select.option>
     @endforeach
 </flux:select>
-            <flux:input wire:model="code" label="Batch code" placeholder="MIF-OAP-2026-03" required /><flux:input wire:model="name" label="Batch name" placeholder="OAP Batch 3" required /><flux:input wire:model="capacity" type="number" min="1" label="Capacity" required /><flux:select wire:model="status" label="Status" required><flux:select.option value="upcoming">Upcoming</flux:select.option><flux:select.option value="in_training">In training</flux:select.option><flux:select.option value="completed">Completed</flux:select.option><flux:select.option value="cancelled">Cancelled</flux:select.option></flux:select><flux:input wire:model="starts_at" type="date" label="Start date" required /><flux:input wire:model="ends_at" type="date" label="End date" required /><flux:input wire:model="next_class_at" type="datetime-local" label="Next class date and time (optional)" /><flux:input wire:model="venue" label="Class venue (optional)" placeholder="Training room / venue" /><div class="flex items-end justify-end gap-3"><flux:button variant="ghost" type="button" wire:click="resetForm">Reset</flux:button><flux:button variant="primary" type="submit">Save schedule</flux:button></div></form></flux:card>
-    @endif
+            <flux:input wire:model="code" label="Batch code" placeholder="MIF-OAP-2026-03" required /><flux:input wire:model="name" label="Batch name" placeholder="OAP Batch 3" required /><flux:input wire:model="capacity" type="number" min="1" label="Capacity" required /><flux:select wire:model="status" label="Status" required><flux:select.option value="upcoming">Upcoming</flux:select.option><flux:select.option value="in_training">In training</flux:select.option><flux:select.option value="completed">Completed</flux:select.option><flux:select.option value="cancelled">Cancelled</flux:select.option></flux:select><flux:input wire:model="starts_at" type="date" label="Start date" required /><flux:input wire:model="ends_at" type="date" label="End date" required /><flux:input wire:model="next_class_at" type="datetime-local" label="Next class date and time (optional)" /><flux:input wire:model="venue" label="Class venue (optional)" placeholder="Training room / venue" /><div class="flex items-end justify-end gap-3"><flux:button variant="ghost" type="button" wire:click="resetForm">Reset</flux:button><flux:button variant="primary" type="submit">Save schedule</flux:button></div></form>
+        </div>
+    </flux:modal>
 
-    <div class="grid gap-4 lg:grid-cols-2">@forelse($this->batches as $batch)<flux:card class="bg-white p-6 shadow-sm"><div class="flex items-start justify-between gap-4"><div><p class="text-xs font-bold tracking-wide text-cyan-600">{{ $batch->code }}</p><flux:heading size="lg" class="mt-1">{{ $batch->name }}</flux:heading><flux:text class="mt-1">{{ $batch->course?->name }}</flux:text></div><span class="rounded-full px-3 py-1 text-xs font-bold {{ $batch->status === 'in_training' ? 'bg-emerald-50 text-emerald-700' : ($batch->status === 'cancelled' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700') }}">{{ str($batch->status)->headline() }}</span></div><div class="mt-5 grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm"><div><p class="text-xs text-slate-400">Schedule</p><p class="mt-1 font-semibold text-slate-700">{{ $batch->starts_at?->format('M d, Y') }} – {{ $batch->ends_at?->format('M d, Y') }}</p></div><div><p class="text-xs text-slate-400">Capacity</p><p class="mt-1 font-semibold text-slate-700">{{ $batch->applications()->count() }} / {{ $batch->capacity }} trainees</p></div></div><div class="mt-4 rounded-xl bg-blue-50 p-3 text-sm"><p class="font-semibold text-blue-900">Next class: {{ $batch->next_class_at?->format('M d, Y · h:i A') ?? 'Not scheduled' }}</p><p class="mt-1 text-blue-800">Venue: {{ $batch->venue ?: 'Not announced' }}</p></div><div class="mt-5 flex justify-end gap-2"><flux:button variant="filled" size="sm" wire:click="edit({{ $batch->id }})">Edit</flux:button><flux:button variant="danger" size="sm" wire:click="delete({{ $batch->id }})" wire:confirm="Delete {{ $batch->name }}? Assigned application records will remain but lose their batch assignment.">Delete</flux:button></div></flux:card>@empty <flux:card class="col-span-full p-12 text-center text-slate-400">No batches have been created yet.</flux:card>@endforelse</div>
+    <div class="grid gap-4 lg:grid-cols-2">@forelse($this->batches as $batch)<flux:card class="bg-white p-6 shadow-sm"><div class="flex items-start justify-between gap-4"><div><p class="text-xs font-bold tracking-wide text-cyan-600">{{ $batch->code }}</p><flux:heading size="lg" class="mt-1">{{ $batch->name }}</flux:heading><flux:text class="mt-1">{{ $batch->course?->name }}</flux:text></div><span class="rounded-full px-3 py-1 text-xs font-bold {{ $batch->status === 'in_training' ? 'bg-emerald-50 text-emerald-700' : ($batch->status === 'cancelled' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700') }}">{{ str($batch->status)->headline() }}</span></div><div class="mt-5 grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm"><div><p class="text-xs text-slate-400">Schedule</p><p class="mt-1 font-semibold text-slate-700">{{ $batch->starts_at?->format('M d, Y') }} – {{ $batch->ends_at?->format('M d, Y') }}</p></div><div><p class="text-xs text-slate-400">Capacity</p><p class="mt-1 font-semibold text-slate-700">{{ $batch->applications()->count() }} / {{ $batch->capacity }} trainees</p></div></div><div class="mt-4 rounded-xl bg-blue-50 p-3 text-sm"><p class="font-semibold text-blue-900">Next class: {{ $batch->next_class_at?->format('M d, Y · h:i A') ?? 'Not scheduled' }}</p><p class="mt-1 text-blue-800">Venue: {{ $batch->venue ?: 'Not announced' }}</p></div><div class="mt-5 flex justify-end gap-2"><flux:button variant="filled" size="sm" wire:click="edit({{ $batch->id }})">Edit</flux:button><flux:button variant="danger" size="sm" wire:click="openDelete({{ $batch->id }})">Delete</flux:button></div></flux:card>@empty <flux:card class="col-span-full p-12 text-center text-slate-400">No batches have been created yet.</flux:card>@endforelse</div>
 </div>

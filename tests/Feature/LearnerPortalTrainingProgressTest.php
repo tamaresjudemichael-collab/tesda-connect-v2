@@ -78,11 +78,13 @@ test('confirmed learner sees their own competency and attendance status without 
 
     $this->actingAs($learner);
 
-    Livewire::test('learner.portal')
+    Livewire::test('learner.competency-progress')
         ->assertSee('Training competency progress')
         ->assertSee('Raise Organic Chicken')
         ->assertSee('Select Healthy Stocks')
-        ->assertSee('Competent')
+        ->assertSee('Competent');
+
+    Livewire::test('learner.attendance')
         ->assertSee('My attendance')
         ->assertSee('Present')
         ->assertSee('Present during practical session');

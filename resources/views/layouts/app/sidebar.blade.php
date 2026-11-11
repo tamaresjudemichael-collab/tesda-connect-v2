@@ -279,14 +279,7 @@
                         >
                             System Overview
                         </flux:sidebar.item>
-                        <flux:sidebar.item
-                            icon="chart-bar"
-                            :href="route('dashboard') . '#bst-mif-comparison'"
-                            :current="false"
-                            wire:navigate
-                        >
-                            BST ↔ MIF Comparison
-                        </flux:sidebar.item>
+                        
                         <flux:sidebar.item
                             icon="clipboard-document-list"
                             :href="route('system.activity')"
@@ -295,14 +288,7 @@
                         >
                             Activity Logs
                         </flux:sidebar.item>
-                        <flux:sidebar.item
-                            icon="chart-bar"
-                            :href="route('dashboard') . '#quick-stats'"
-                            :current="false"
-                            wire:navigate
-                        >
-                            Quick Stats
-                        </flux:sidebar.item>
+                        
                     </flux:sidebar.group>
 
                     <flux:sidebar.group heading="ENROLLMENT MONITORING" expandable :expanded="false" data-tesda-sidebar-group="enrollment" class="grid text-blue-200">
@@ -650,8 +636,23 @@
                         <flux:sidebar.item icon="home" :href="route('learner.portal')" :current="request()->routeIs('learner.portal')" wire:navigate>
                             Student / Scholar Dashboard
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="book-open" :href="route('learning.my-materials')" :current="request()->routeIs('learning.my-materials')" wire:navigate>
-                            My Course Materials
+                        <flux:sidebar.item icon="chart-bar" :href="route('learner.learning-progress')" :current="request()->routeIs('learner.learning-progress')" wire:navigate>
+                            Learning Progress
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="academic-cap" :href="route('learner.competency-progress')" :current="request()->routeIs('learner.competency-progress')" wire:navigate>
+                            Training Competency Progress
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('learner.attendance')" :current="request()->routeIs('learner.attendance')" wire:navigate>
+                            My Attendance
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="academic-cap" :href="route('learner.certification')" :current="request()->routeIs('learner.certification')" wire:navigate>
+                            Certification &amp; Completion
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="document-text" :href="route('learner.documents')" :current="request()->routeIs('learner.documents')" wire:navigate>
+                            My Documents
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="megaphone" :href="route('learner.announcements')" :current="request()->routeIs('learner.announcements')" wire:navigate>
+                            Announcements
                         </flux:sidebar.item>
                     </flux:sidebar.group>
 

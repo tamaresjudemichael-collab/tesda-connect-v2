@@ -22,11 +22,10 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique([
-                'competency_unit_id',
-                'chart_type',
-                'task_number',
-            ]);
+            $table->unique(
+                ['competency_unit_id', 'chart_type', 'task_number'],
+                'comp_tasks_unit_chart_task_unique'
+            );
 
             $table->index([
                 'competency_unit_id',
